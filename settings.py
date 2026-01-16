@@ -195,7 +195,7 @@ class ApiModelSettings(BaseFileSettings):
 
     model_config = SettingsConfigDict(yaml_file=CHATCHAT_ROOT / "model_settings.yaml")
 
-    DEFAULT_LLM_MODEL: str = "deepseek-r1:1.5b"
+    DEFAULT_LLM_MODEL: str = "qwen2.5:0.5b"
     """默认选用的 LLM 名称"""
 
     DEFAULT_EMBEDDING_MODEL: str = "quentinz/bge-small-zh-v1.5"
@@ -229,13 +229,10 @@ class ApiModelSettings(BaseFileSettings):
             "api_key": "EMPTY",
             "api_concurrencies": 5,
             "llm_models": [
-                "deepseek-r1:1.5b",
-                "deepseek-r1:7b",
-                "deepseek-r1:14b",
+                "qwen2.5:0.5b",
             ],
             "embed_models": [
                 "quentinz/bge-small-zh-v1.5",
-                "quentinz/bge-base-zh-v1.5",
             ],
         }),
         PlatformConfig(**{
