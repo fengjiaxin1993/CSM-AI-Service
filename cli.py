@@ -55,14 +55,12 @@ def main():
 @main.command("init", help="项目初始化")
 def init():
     Settings.set_auto_reload(False)
-    bs = Settings.basic_settings
     logger.info(f"开始初始化项目数据目录：{Settings.CHATCHAT_ROOT}")
     Settings.basic_settings.make_dirs()
     logger.info("创建所有数据目录：成功。")
-    copy_data_to_binary_dir()
-    logger.info("复制 samples 知识库文件：成功。")
-    logger.info("初始化知识库数据库：成功。")
+    logger.info("开始创建相关表信息")
     create_tables()
+    logger.info("创建表信息：成功。")
     Settings.create_all_templates()
     Settings.set_auto_reload(True)
 
