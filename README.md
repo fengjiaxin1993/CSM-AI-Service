@@ -12,6 +12,8 @@ langchain-chatchat大模型服务项目，要部署在凝思/麒麟系统，这�
 ## 1. 环境安装, 在凝思系统/麒麟系统上 安装好anaconda/miniconda
 
 - conda chatchat create -f conda-environment.yaml
+- 这会创建一个 chatchat 的环境， 下次启动可以
+- conda activate chatchat
 
 ## 2. 项目启动说明
 - python cli.py init # 生成配置文件yaml

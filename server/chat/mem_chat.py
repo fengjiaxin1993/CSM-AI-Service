@@ -2,12 +2,12 @@ import logging
 import uuid
 
 from fastapi import Body
-from langchain_core.callbacks import BaseCallbackHandler
 from sse_starlette.sse import EventSourceResponse
 
 from server.api_server.api_schemas import OpenAIChatOutput
 from server.callback_handler.conversation_callback_handler import ConversationCallbackHandler
 from server.chat.utils import History
+from server.db.repository import add_conversation_to_db, filter_conversation
 from langchain.callbacks import AsyncIteratorCallbackHandler
 from typing import AsyncIterable
 import asyncio
@@ -17,22 +17,15 @@ from server.utils import (
     get_ChatOpenAI,
     get_prompt_template,
     wrap_done,
+    get_default_llm,
 )
 from settings import Settings
 
 
 async def mem_chat(
-        query: str = Body(..., description="用户输入", examples=["恼羞成怒"]),
-        history: List[History] = Body(
-            [],
-            description="历史对话，设为一个整数可以从数据库中读取历史消息",
-            examples=[
-                [
-                    {"role": "user", "content": "我们来玩成语接龙，我先来，生龙活虎"},
-                    {"role": "assistant", "content": "虎头虎脑"},
-                ]
-            ],
-        ),
+        query: str = Body("介绍一下deepSeek创新点",description="用户问题"),
+        conversation_id: str = Body("", description="对话框id"),
+        history_len: int = Body(3, description="从数据库中取历史消息的数量"),
         stream: bool = Body(False, description="流式输出"),
         model_name: str = Body(Settings.model_settings.DEFAULT_LLM_MODEL, description="LLM 模型名称。"),
         temperature: float = Body(Settings.model_settings.TEMPERATURE, description="LLM 采样温度", ge=0.0, le=2.0),
@@ -41,17 +34,26 @@ async def mem_chat(
 ):
 
     async def chat_iterator() -> AsyncIterable[str]:
+        nonlocal max_tokens
         callback = AsyncIteratorCallbackHandler()
         callbacks = [callback]
 
+        # 负责保存llm response到message db
+        message_id = add_conversation_to_db(chat_type="llm_chat", query=query, conversation_id=conversation_id)
+        conversation_callback = ConversationCallbackHandler(conversation_id=conversation_id, message_id=message_id,
+                                            chat_type="llm_chat",
+                                            query=query)
+        callbacks.append(conversation_callback)
+        # 判断是否传入 max_tokens 的值, 如果传入就按传入的赋值(api 调用且赋值), 如果没有传入则按照初始化配置赋值(ui 调用或 api 调用未赋值)
+        max_tokens_value = max_tokens if max_tokens is not None and max_tokens > 0 else Settings.model_settings.MAX_TOKENS
         model = get_ChatOpenAI(
             model_name=model_name,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_tokens=max_tokens_value,
             callbacks=callbacks,
         )
 
-        if len(history)  > 0:  # 根据user_id 获取历史对话信息
+        if conversation_id and history_len > 0:  # 根据user_id 获取历史对话信息
             # 根据user_id 获取message 列表进而拼凑 memory
             messages = filter_conversation(
                 conversation_id=conversation_id, limit=history_len
