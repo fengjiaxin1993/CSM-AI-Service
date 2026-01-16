@@ -1,4 +1,3 @@
-import logging
 import uuid
 
 from fastapi import Body
@@ -16,14 +15,21 @@ from typing import List, Optional
 from server.utils import (
     get_ChatOpenAI,
     get_prompt_template,
-    wrap_done,
-    get_default_llm,
+    wrap_done
 )
 from settings import Settings
 
 
 async def mem_chat(
-        query: str = Body("介绍一下deepSeek创新点",description="用户问题"),
+        messages: List[dict] = Body(
+            [],
+            description="消息",
+            examples=[
+                [
+                    {"role": "user", "content": "介绍一下deepSeek创新点"}
+                ]
+            ],
+        ),
         conversation_id: str = Body("", description="对话框id"),
         history_len: int = Body(3, description="从数据库中取历史消息的数量"),
         stream: bool = Body(False, description="流式输出"),
@@ -32,6 +38,7 @@ async def mem_chat(
         max_tokens: int = Body(Settings.model_settings.MAX_TOKENS, description="LLM最大token数配置,一定要大于0",
                                example=4096),
 ):
+    query = messages[-1]["content"]
 
     async def chat_iterator() -> AsyncIterable[str]:
         nonlocal max_tokens
@@ -41,8 +48,8 @@ async def mem_chat(
         # 负责保存llm response到message db
         message_id = add_conversation_to_db(chat_type="llm_chat", query=query, conversation_id=conversation_id)
         conversation_callback = ConversationCallbackHandler(conversation_id=conversation_id, message_id=message_id,
-                                            chat_type="llm_chat",
-                                            query=query)
+                                                            chat_type="llm_chat",
+                                                            query=query)
         callbacks.append(conversation_callback)
         # 判断是否传入 max_tokens 的值, 如果传入就按传入的赋值(api 调用且赋值), 如果没有传入则按照初始化配置赋值(ui 调用或 api 调用未赋值)
         max_tokens_value = max_tokens if max_tokens is not None and max_tokens > 0 else Settings.model_settings.MAX_TOKENS
@@ -67,10 +74,11 @@ async def mem_chat(
                 # history.append(History(**{"role": "assistant", "content": message["response"]}))
 
             prompt_template = get_prompt_template("llm_model", "default")
-            system_msg = History(role="assistant", content="你是一个知识渊博的助手，请帮助用户解答问题。").to_msg_template(False)
+            system_msg = History(role="assistant",
+                                 content="你是一个知识渊博的助手，请帮助用户解答问题。").to_msg_template(False)
             input_msg = History(role="user", content=prompt_template).to_msg_template(False)
             chat_prompt = ChatPromptTemplate.from_messages([system_msg] +
-                    [i.to_msg_template(False) for i in history] + [input_msg])
+                                                           [i.to_msg_template(False) for i in history] + [input_msg])
 
         else:  # 不考虑任何历史记录
             prompt_template = get_prompt_template("llm_model", "default")
@@ -114,4 +122,3 @@ async def mem_chat(
         return EventSourceResponse(chat_iterator())
     else:
         return await chat_iterator().__anext__()
-

@@ -20,6 +20,7 @@ from typing import (
 )
 
 import httpx
+import numpy as np
 import openai
 from fastapi import FastAPI
 from langchain_core.embeddings import Embeddings
@@ -245,6 +246,86 @@ def get_OpenAI(
     return model
 
 
+# ---------------------- 步骤1：封装安全的 L2 归一化函数（避免极限值） ----------------------
+def safe_l2_normalize(vector: List[float], epsilon: float = 1e-8) -> List[float]:
+    """
+    安全的向量 L2 归一化函数，避免除以零、NaN/Inf 等极限值问题
+    :param vector: 输入的原始向量
+    :param epsilon: 极小值，用于防止分母为零
+    :return: 归一化后的向量
+    """
+    try:
+        # 转换为 numpy 数组，方便进行数值计算
+        vec_np = np.array(vector, dtype=np.float64)
+
+        # 计算 L2 范数（欧几里得范数）
+        l2_norm = np.linalg.norm(vec_np, ord=2)
+
+        # 安全判断：若范数接近零（小于 epsilon），直接返回原向量（或零向量），避免除以零
+        if l2_norm < epsilon:
+            logger.warning("Vector L2 norm is close to zero, skip normalization to avoid division by zero.")
+            return vec_np.tolist()  # 转回列表格式，保持接口一致性
+
+        # 执行归一化：向量 / 其 L2 范数，得到单位向量
+        normalized_vec = vec_np / l2_norm
+
+        # 额外处理：防止极端数值（NaN/Inf），替换为合理值
+        normalized_vec = np.nan_to_num(normalized_vec, nan=0.0, posinf=epsilon, neginf=-epsilon)
+
+        return normalized_vec.tolist()
+
+    except Exception as e:
+        logger.error(f"Failed to normalize vector: {str(e)}", exc_info=True)
+        # 异常时返回原始向量，保证程序不中断
+        return vector
+
+
+# ---------------------- 步骤2：创建自定义 Embeddings 包装类，集成归一化功能 ----------------------
+class NormalizedEmbeddings(Embeddings):
+    """
+    自定义 Embeddings 包装类，在原始 Embeddings 基础上添加向量归一化功能
+    保持与 LangChain Embeddings 抽象类的接口兼容
+    """
+
+    def __init__(self, base_embeddings: Embeddings, normalize: bool = True):
+        """
+        初始化包装类
+        :param base_embeddings: 原始的 Embeddings 实例（如 OpenAIEmbeddings、OllamaEmbeddings）
+        :param normalize: 是否开启归一化，默认开启
+        """
+        self.base_embeddings = base_embeddings
+        self.normalize = normalize
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """
+        批量嵌入文档，返回归一化后的向量列表
+        :param texts: 文档文本列表
+        :return: 归一化后的批量向量
+        """
+        # 调用原始 Embeddings 的批量嵌入方法
+        raw_embeddings = self.base_embeddings.embed_documents(texts)
+
+        # 若开启归一化，对每个向量执行安全归一化
+        if self.normalize:
+            return [safe_l2_normalize(vec) for vec in raw_embeddings]
+
+        return raw_embeddings
+
+    def embed_query(self, text: str) -> List[float]:
+        """
+        单个查询嵌入，返回归一化后的向量
+        :param text: 查询文本
+        :return: 归一化后的单个向量
+        """
+        # 调用原始 Embeddings 的单个查询嵌入方法
+        raw_embedding = self.base_embeddings.embed_query(text)
+
+        # 若开启归一化，执行安全归一化
+        if self.normalize:
+            return safe_l2_normalize(raw_embedding)
+
+        return raw_embedding
+
 
 def get_Embeddings(
         embed_model: str = None,
@@ -282,7 +363,7 @@ def get_Embeddings(
             )
         else:
             base_embeddings = LocalAIEmbeddings(**params)
-        return base_embeddings
+        return NormalizedEmbeddings(base_embeddings)
     except Exception as e:
         logger.error(
             f"failed to create Embeddings for model: {embed_model}.", exc_info=True

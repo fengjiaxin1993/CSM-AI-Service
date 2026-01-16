@@ -18,7 +18,7 @@ from server.file_rag.text_splitter import (
     zh_title_enhance as func_zh_title_enhance,
 )
 from server.utils import run_in_process_pool, run_in_thread_pool
-from server.utils import build_logger
+from utils import build_logger
 
 logger = build_logger()
 

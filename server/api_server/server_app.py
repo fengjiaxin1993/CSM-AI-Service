@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
 from settings import Settings
 from server.api_server.chat_routes import chat_router
+from server.api_server.kb_routes import kb_router
+from server.api_server.server_routes import server_router
 from server.utils import MakeFastAPIOffline
 
 
@@ -28,6 +30,8 @@ def create_app():
         return RedirectResponse(url="/docs")
 
     app.include_router(chat_router)
+    app.include_router(kb_router)
+    app.include_router(server_router)
 
     return app
 

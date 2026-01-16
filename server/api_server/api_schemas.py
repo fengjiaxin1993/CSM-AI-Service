@@ -4,7 +4,6 @@ import json
 import time
 from typing import Dict, List, Literal, Optional, Union
 
-from fastapi import UploadFile
 from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionToolChoiceOptionParam,

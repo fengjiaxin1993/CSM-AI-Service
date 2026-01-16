@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.schema import LLMResult
+from server.db.repository.conversation_repository import update_conversation
 
 
 class ConversationCallbackHandler(BaseCallbackHandler):
@@ -29,3 +30,4 @@ class ConversationCallbackHandler(BaseCallbackHandler):
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         answer = response.generations[0][0].text
+        update_conversation(self.message_id, answer)
