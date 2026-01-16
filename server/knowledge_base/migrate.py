@@ -48,7 +48,7 @@ def folder2db(
         kb_names: List[str],
         mode: Literal["recreate_vs", "update_in_db", "increment"],
         vs_type: Literal["chromadb"] = Settings.kb_settings.DEFAULT_VS_TYPE,
-        embed_model: str = get_default_embedding(),
+        embed_model: str = Settings.model_settings.DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = Settings.kb_settings.CHUNK_SIZE,
         chunk_overlap: int = Settings.kb_settings.OVERLAP_SIZE,
         zh_title_enhance: bool = Settings.kb_settings.ZH_TITLE_ENHANCE,
@@ -83,8 +83,13 @@ def folder2db(
         return result
 
     kb_names = kb_names or list_kbs_from_folder()
+    print(kb_names)
     for kb_name in kb_names:
         start = datetime.now()
+        print(kb_name)
+        print(vs_type)
+        print(embed_model)
+        print("------------")
         kb = KBServiceFactory.get_service(kb_name, vs_type, embed_model)
         if not kb.exists():
             kb.create_kb()

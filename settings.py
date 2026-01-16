@@ -111,9 +111,6 @@ class KBSettings(BaseFileSettings):
     DEFAULT_KNOWLEDGE_BASE: str = "samples"
     """默认使用的知识库"""
 
-    DEFAULT_VS_TYPE: str = "chromadb"
-    """默认使用chromadb向量数据库"""
-
     CACHED_VS_NUM: int = 1
     """缓存向量库数量（针对FAISS）"""
 
@@ -179,9 +176,6 @@ class PlatformConfig(MyBaseModel):
     api_key: str = "EMPTY"
     """api key if available"""
 
-    api_concurrencies: int = 5
-    """该平台单模型最大并发数"""
-
     llm_models: t.Union[t.Literal["auto"], t.List[str]] = []
     """该平台支持的大语言模型列表"""
 
@@ -226,7 +220,6 @@ class ApiModelSettings(BaseFileSettings):
             "platform_type": "ollama",
             "api_base_url": "http://192.168.88.1:11434/v1",
             "api_key": "EMPTY",
-            "api_concurrencies": 5,
             "llm_models": [
                 "qwen2.5:0.5b",
             ],
@@ -239,7 +232,6 @@ class ApiModelSettings(BaseFileSettings):
             "platform_type": "openai",
             "api_base_url": "https://api.openai.com/v1",
             "api_key": "sk-proj-",
-            "api_concurrencies": 5,
             "llm_models": [
                 "gpt-4o",
                 "gpt-3.5-turbo",

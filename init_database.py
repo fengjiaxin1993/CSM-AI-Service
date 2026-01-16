@@ -37,8 +37,7 @@ def worker(args: dict):
             create_tables()
             print("recreating all vector stores")
             folder2db(
-                kb_names=args.get("kb_name"), mode="recreate_vs", embed_model=args.get("embed_model")
-            )
+                kb_names=args.get("kb_name"), mode="recreate_vs")
         end_time = datetime.now()
         print(f"总计用时\t：{end_time - start_time}\n")
     except Exception as e:
