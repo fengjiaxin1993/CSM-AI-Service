@@ -30,7 +30,7 @@ if data_dir.exists():
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {
-    'packages': ['server','fastapi','uvicorn','openai','starlette','argparse','langchain','sqlalchemy',
+    'packages': ['server','fastapi','uvicorn','openai','starlette','argparse','langchain','sqlalchemy','anyio',
                  'langchain_community','langchain_core', 'tenacity','pydantic','memoization','ruamel','asyncio'],  # 依赖的包，python自己无法找到的包
     'excludes': [],  # 不包含那些包
     "include_files": include_files

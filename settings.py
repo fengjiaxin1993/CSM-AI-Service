@@ -225,7 +225,7 @@ class ApiModelSettings(BaseFileSettings):
         PlatformConfig(**{
             "platform_name": "ollama",
             "platform_type": "ollama",
-            "api_base_url": "http://127.0.0.1:11434/v1",
+            "api_base_url": "http://192.168.88.1:11434/v1",
             "api_key": "EMPTY",
             "api_concurrencies": 5,
             "llm_models": [
