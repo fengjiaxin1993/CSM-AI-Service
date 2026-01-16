@@ -4,10 +4,9 @@ import shutil
 import sys
 from pathlib import Path
 import click
-
-from server.knowledge_base.migrate import create_tables
 from utils import build_logger
 from startup import main as startup_main
+from init_database import main as kb_main, create_tables
 from settings import Settings
 
 logger = build_logger()
@@ -69,6 +68,7 @@ def init():
 
 
 main.add_command(startup_main, "start")
+main.add_command(kb_main, "kb")
 
 # 项目入口（调用命令组）
 if __name__ == "__main__":

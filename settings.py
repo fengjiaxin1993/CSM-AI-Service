@@ -61,7 +61,6 @@ class BasicSettings(BaseFileSettings):
     def BASE_TEMP_DIR(self) -> Path:
         """临时文件目录，主要用于文件对话"""
         p = self.DATA_PATH / "temp"
-        (p / "openai_files").mkdir(parents=True, exist_ok=True)
         return p
 
     KB_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/knowledge_base")

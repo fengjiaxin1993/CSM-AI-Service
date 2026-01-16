@@ -9,7 +9,7 @@ import click
 from settings import Settings
 from server.knowledge_base.migrate import (
     create_tables,
-    reset_tables,
+    reset_tables, folder2db,
 )
 from utils import build_logger
 from server.utils import get_default_embedding
@@ -39,19 +39,6 @@ def worker(args: dict):
             folder2db(
                 kb_names=args.get("kb_name"), mode="recreate_vs", embed_model=args.get("embed_model")
             )
-        elif args.get("update_in_db"):
-            folder2db(
-                kb_names=args.get("kb_name"), mode="update_in_db", embed_model=args.get("embed_model")
-            )
-        elif args.get("increment"):
-            folder2db(
-                kb_names=args.get("kb_name"), mode="increment", embed_model=args.get("embed_model")
-            )
-        elif args.get("prune_db"):
-            prune_db_docs(args.get("kb_name"))
-        elif args.get("prune_folder"):
-            prune_folder_files(args.get("kb_name"))
-
         end_time = datetime.now()
         print(f"总计用时\t：{end_time - start_time}\n")
     except Exception as e:
@@ -81,64 +68,6 @@ def worker(args: dict):
     help=(
             "create empty tables, or drop the database tables before recreate vector stores"
     ),
-)
-@click.option(
-    "-u",
-    "--update-in-db",
-    is_flag=True,
-    help=(
-            """
-            update vector store for files exist in database.
-            use this option if you want to recreate vectors for files exist in db and skip files exist in local folder only.
-            """
-    ),
-)
-@click.option(
-    "-i",
-    "--increment",
-    is_flag=True,
-    help=(
-            """
-            update vector store for files exist in local folder and not exist in database.
-            use this option if you want to create vectors incrementally.
-            """
-    ),
-)
-@click.option(
-    "--prune-db",
-    is_flag=True,
-    help=(
-            """
-            delete docs in database that not existed in local folder.
-            it is used to delete database docs after user deleted some doc files in file browser
-            """
-    ),
-)
-@click.option(
-    "--prune-folder",
-    is_flag=True,
-    help=(
-            """
-            delete doc files in local folder that not existed in database.
-            is is used to free local disk space by delete unused doc files.
-            """
-    ),
-)
-@click.option(
-    "-n",
-    "--kb-name",
-    multiple=True,
-    default=[],
-    help=(
-            "specify knowledge base names to operate on. default is all folders exist in KB_ROOT_PATH."
-    ),
-)
-@click.option(
-    "-e",
-    "--embed-model",
-    type=str,
-    default=get_default_embedding(),
-    help=("specify embeddings model."),
 )
 def main(**kwds):
     p = mp.Process(target=worker, args=(kwds,), daemon=True)
