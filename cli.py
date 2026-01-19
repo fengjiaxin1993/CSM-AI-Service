@@ -1,5 +1,7 @@
 # cli_group.py
-import os
+import warnings
+# 屏蔽 pydantic 模块下所有 UserWarning
+warnings.filterwarnings("ignore", category=UserWarning, module=r"pydantic.*")
 import shutil
 import sys
 from pathlib import Path
@@ -8,9 +10,6 @@ from utils import build_logger
 from startup import main as startup_main
 from init_database import main as kb_main, create_tables
 from settings import Settings
-import warnings
-# 屏蔽 Pydantic 字段命名冲突警告
-warnings.filterwarnings("ignore", category=UserWarning)
 
 logger = build_logger()
 
