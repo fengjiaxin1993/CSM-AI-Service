@@ -1,11 +1,9 @@
 import os
 from datetime import datetime
 from typing import List, Literal
-from dateutil.parser import parse
 from settings import Settings
 from server.db.base import Base, engine
 
-from server.db.session import session_scope
 from server.knowledge_base.kb_service.base import (
     KBServiceFactory,
     SupportedVSType,
@@ -18,7 +16,6 @@ from server.knowledge_base.utils import (
     list_kbs_from_folder,
 )
 from utils import build_logger
-from server.utils import get_default_embedding
 
 logger = build_logger()
 
@@ -47,7 +44,7 @@ def file_to_kbfile(kb_name: str, files: List[str]) -> List[KnowledgeFile]:
 def folder2db(
         kb_names: List[str],
         mode: Literal["recreate_vs", "update_in_db", "increment"],
-        vs_type: Literal["chromadb"] = Settings.kb_settings.DEFAULT_VS_TYPE,
+        vs_type: Literal["faiss"] = Settings.kb_settings.DEFAULT_VS_TYPE,
         embed_model: str = Settings.model_settings.DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = Settings.kb_settings.CHUNK_SIZE,
         chunk_overlap: int = Settings.kb_settings.OVERLAP_SIZE,
@@ -83,13 +80,8 @@ def folder2db(
         return result
 
     kb_names = kb_names or list_kbs_from_folder()
-    print(kb_names)
     for kb_name in kb_names:
         start = datetime.now()
-        print(kb_name)
-        print(vs_type)
-        print(embed_model)
-        print("------------")
         kb = KBServiceFactory.get_service(kb_name, vs_type, embed_model)
         if not kb.exists():
             kb.create_kb()

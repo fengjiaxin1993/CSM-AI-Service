@@ -394,7 +394,6 @@ def download_doc(
 def recreate_vector_store(
         knowledge_base_name: str = Body(..., examples=["samples"]),
         allow_empty_kb: bool = Body(True),
-        vs_type: str = Body(Settings.kb_settings.DEFAULT_VS_TYPE),
         embed_model: str = Body(get_default_embedding()),
         chunk_size: int = Body(Settings.kb_settings.CHUNK_SIZE, description="知识库中单段文本最大长度"),
         chunk_overlap: int = Body(Settings.kb_settings.OVERLAP_SIZE, description="知识库中相邻文本重合长度"),

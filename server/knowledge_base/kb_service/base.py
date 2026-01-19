@@ -377,7 +377,7 @@ class KBServiceFactory:
         _, vs_type, embed_model = load_kb_from_db(kb_name)
         if _ is None:  # kb not in db, just return None
             return None
-        return KBServiceFactory.get_service(kb_name, vs_type, embed_model)
+        return KBServiceFactory.get_service(kb_name, embed_model)
 
     @staticmethod
     def get_default():

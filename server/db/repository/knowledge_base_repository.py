@@ -54,6 +54,7 @@ def load_kb_from_db(session, kb_name):
         .filter(KnowledgeBaseModel.kb_name.ilike(kb_name))
         .first()
     )
+
     if kb:
         kb_name, vs_type, embed_model = kb.kb_name, kb.vs_type, kb.embed_model
     else:

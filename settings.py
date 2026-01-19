@@ -111,6 +111,9 @@ class KBSettings(BaseFileSettings):
     DEFAULT_KNOWLEDGE_BASE: str = "samples"
     """默认使用的知识库"""
 
+    DEFAULT_VS_TYPE: str = "faiss"
+    """默认使用faiss向量数据库"""
+
     CACHED_VS_NUM: int = 1
     """缓存向量库数量（针对FAISS）"""
 
