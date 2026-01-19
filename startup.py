@@ -1,4 +1,5 @@
 import uvicorn
+import logging
 from utils import build_logger
 import click
 from settings import Settings
