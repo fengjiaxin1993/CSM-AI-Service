@@ -2,9 +2,6 @@
 import warnings
 # 屏蔽 pydantic 模块下所有 UserWarning
 warnings.filterwarnings("ignore", category=UserWarning, module=r"pydantic.*")
-import shutil
-import sys
-from pathlib import Path
 import click
 from utils import build_logger
 from startup import main as startup_main
@@ -12,38 +9,6 @@ from init_database import main as kb_main, create_tables
 from settings import Settings
 
 logger = build_logger()
-
-
-# ========== 新增：路径适配 + 文件夹复制工具函数 ==========
-def get_real_path(relative_path: str) -> Path:
-    """适配开发环境/打包后环境，获取文件/目录的真实路径"""
-    if getattr(sys, 'frozen', False):
-        binary_dir = Path(sys.executable).parent
-        real_path = binary_dir / relative_path
-    else:
-        current_script_dir = Path(__file__).parent
-        real_path = current_script_dir / relative_path
-    return real_path.resolve()
-
-
-def copy_data_to_binary_dir(overwrite: bool = False) -> None:
-    """将 data 文件夹复制到二进制程序所在目录"""
-    data_src = get_real_path("data")
-    data_dst = Path(sys.executable).parent / "data"  # 目标目录：二进制同级的 data 目录（与源同名）
-
-    if not data_src.exists():
-        raise FileNotFoundError(f"源 data 目录不存在：{data_src}，请检查打包配置")
-
-    if data_dst.exists():
-        if not overwrite:
-            click.echo(f"✅ 目标 data 目录已存在，跳过复制：{data_dst}")
-            return
-        else:
-            click.echo(f"🔄 目标 data 目录已存在，删除后重新复制")
-            shutil.rmtree(data_dst)
-
-    shutil.copytree(data_src, data_dst, dirs_exist_ok=False)
-    click.echo(f"✅ data 目录复制完成：{data_dst}")
 
 
 # 步骤1：创建命令组（所有子命令的容器）
