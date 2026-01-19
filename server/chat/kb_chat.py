@@ -115,15 +115,6 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
                       ge=-1,
                       le=1,
                   ),
-                  history: List[History] = Body(
-                      [],
-                      description="历史对话",
-                      examples=[[
-                          {"role": "user",
-                           "content": "我们来玩成语接龙，我先来，生龙活虎"},
-                          {"role": "assistant",
-                           "content": "虎头虎脑"}]]
-                  ),
                   stream: bool = Body(True, description="流式输出"),
                   model: str = Body(get_default_llm(), description="LLM 模型名称。"),
                   temperature: float = Body(Settings.model_settings.TEMPERATURE, description="LLM 采样温度", ge=0.0,
@@ -145,10 +136,7 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
             return BaseResponse(code=404, msg=f"未找到知识库 {kb_name}")
 
     async def knowledge_base_chat_iterator() -> AsyncIterable[str]:
-        nonlocal history, prompt_name
-
-        history = [History.from_data(h) for h in history]
-
+        nonlocal prompt_name
         if mode == "local_kb":
             docs = await run_in_threadpool(search_docs,
                                            query=query,
@@ -195,8 +183,7 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
             prompt_name = "empty"
         prompt_template = get_prompt_template("rag", prompt_name)
         input_msg = History(role="user", content=prompt_template).to_msg_template(False)
-        chat_prompt = ChatPromptTemplate.from_messages(
-            [i.to_msg_template() for i in history] + [input_msg])
+        chat_prompt = ChatPromptTemplate.from_messages([input_msg])
 
         chain = chat_prompt | llm
 

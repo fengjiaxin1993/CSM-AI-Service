@@ -1,10 +1,9 @@
-import yaml
 import uvicorn
-import logging
-import logging.config
-from server.api_server.server_app import create_app
 from utils import build_logger
 import click
+from settings import Settings
+from server.api_server.server_app import create_app
+from server.utils import set_httpx_config
 logger = build_logger()
 
 
@@ -15,9 +14,7 @@ def run_api_server():
         get_timestamp_ms,
     )
 
-    from settings import Settings
-    from server.api_server.server_app import create_app
-    from server.utils import set_httpx_config
+
 
     logger.info(f"Api MODEL_PLATFORMS: {Settings.model_settings.MODEL_PLATFORMS}")
     set_httpx_config()
