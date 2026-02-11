@@ -43,6 +43,12 @@ class BasicSettings(BaseFileSettings):
         p = self.DATA_PATH / "nltk_data"
         return p
 
+    @cached_property
+    def TEMPLATE_PATH(self) -> Path:
+        """nltk 模型存储路径"""
+        p = self.DATA_PATH / "template_file"
+        return p
+
     # @computed_field
     @cached_property
     def LOG_PATH(self) -> Path:
@@ -94,6 +100,7 @@ class BasicSettings(BaseFileSettings):
             self.NLTK_DATA_PATH,
             self.LOG_PATH,
             self.BASE_TEMP_DIR,
+            self.TEMPLATE_PATH
         ]:
             p.mkdir(parents=True, exist_ok=True)
         Path(self.KB_ROOT_PATH).mkdir(parents=True, exist_ok=True)

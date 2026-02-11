@@ -7,14 +7,11 @@ from datetime import datetime
 from fastapi import HTTPException
 
 from server.utils import build_logger
-
+from settings import Settings
 logger = build_logger()
 
-# 配置Word模板路径（修改为你的实际模板路径）
+WARNING_TEMPLATE_NAME = "warning_notice_template.docx"
 
-# new_file_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, file.filename)
-TEMPLATE_PATH = r"D:\github\CSM-AI-Service\data\template_file\warning_notice_template.docx"
-temp_word_path = r"D:\github\CSM-AI-Service\server\warning_analysis\temp.docx"
 # 定义必选字段（与模板占位符一一对应）
 REQUIRED_FIELDS = [
     "notice_no", "receive", "editor", "auditor",
@@ -29,6 +26,7 @@ def generate_pdf_from_data(data: dict) -> str:
     """
     内部函数：根据填充数据生成PDF，返回PDF临时文件路径
     """
+    TEMPLATE_PATH = os.path.join(Settings.basic_settings.TEMPLATE_PATH, WARNING_TEMPLATE_NAME)
     # 1. 校验模板文件是否存在
     if not os.path.exists(TEMPLATE_PATH):
         raise HTTPException(status_code=500, detail=f"模板文件不存在，路径：{TEMPLATE_PATH}")
@@ -40,6 +38,13 @@ def generate_pdf_from_data(data: dict) -> str:
             status_code=400,
             detail=f"缺失必选字段/字段值为空：{','.join(missing_fields)}"
         )
+
+    suffix_name = f"整改通知单-{data['notice_no']}"
+    word_name = suffix_name + ".docx"
+    pdf_name = suffix_name + ".pdf"
+    temp_word_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, word_name)
+    temp_pdf_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, pdf_name)
+
     try:
         # 4. 加载模板并填充数据
         tpl = DocxTemplate(TEMPLATE_PATH)
@@ -52,19 +57,21 @@ def generate_pdf_from_data(data: dict) -> str:
         tpl.save(temp_word_path)
 
         # 5. 跨平台转换为PDF（docx2pdf自动适配系统）
-        # convert(temp_word_path, temp_pdf_path)
+        convert(temp_word_path, temp_pdf_path)
 
         # 6. 校验PDF是否生成成功
-        if not os.path.exists(temp_word_path):
+        if not os.path.exists(temp_pdf_path):
             raise Exception("PDF文件生成失败，未找到生成的文件")
-
-        return temp_word_path
+        # for f in [temp_word_path]:
+        #     if os.path.exists(f):
+        #         os.remove(f)
+        return temp_pdf_path
 
     except Exception as e:
         # 异常时清理临时文件
-        # for f in [temp_word_path, temp_pdf_path]:
-        #     if os.path.exists(f):
-        #         os.remove(f)
+        for f in [temp_word_path, temp_pdf_path]:
+            if os.path.exists(f):
+                os.remove(f)
         raise HTTPException(status_code=500, detail=f"PDF生成失败：{str(e)}")
 
 
