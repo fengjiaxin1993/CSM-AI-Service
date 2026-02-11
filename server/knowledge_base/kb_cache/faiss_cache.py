@@ -2,7 +2,6 @@ import os
 
 from langchain.docstore.in_memory import InMemoryDocstore
 from langchain.schema import Document
-
 from server.knowledge_base.utils import get_vs_path, get_user_vs_path
 from settings import Settings
 from server.knowledge_base.kb_cache.base import *
@@ -58,7 +57,8 @@ class _FaissPool(CachePool):
         # create an empty vector store
         embeddings = get_Embeddings(embed_model=embed_model)
         doc = Document(page_content="init", metadata={})
-        vector_store = FAISS.from_documents([doc], embeddings)
+        vector_store = FAISS.from_documents([doc], embeddings,
+                                            normalize_L2=True)
         ids = list(vector_store.docstore._dict.keys())
         vector_store.delete(ids)
         return vector_store
@@ -70,7 +70,8 @@ class _FaissPool(CachePool):
         # create an empty vector store
         embeddings = get_Embeddings(embed_model=embed_model)
         doc = Document(page_content="init", metadata={})
-        vector_store = FAISS.from_documents([doc], embeddings)
+        vector_store = FAISS.from_documents([doc], embeddings,
+                                            normalize_L2=True)
         ids = list(vector_store.docstore._dict.keys())
         vector_store.delete(ids)
         return vector_store
@@ -114,6 +115,7 @@ class KBFaissPool(_FaissPool):
                         vector_store = FAISS.load_local(
                             vs_path,
                             embeddings,
+                            normalize_L2=True,
                             allow_dangerous_deserialization=True,
                         )
                     elif create:
@@ -143,7 +145,6 @@ class MemoFaissPool(_FaissPool):
     r"""
     临时向量库的缓存池
     """
-
     def load_vector_store(
             self,
             kb_name: str,
