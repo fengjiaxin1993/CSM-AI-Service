@@ -68,7 +68,7 @@ class FaissKBService(KBService):
         query: str,
         top_k: int,
         score_threshold: float = Settings.kb_settings.SCORE_THRESHOLD,
-    ) -> List[Tuple[Document, float]]:
+    ) -> List[Document]:
         with self.load_vector_store().acquire() as vs:
             retriever = get_Retriever("vectorstore").from_vectorstore(
                 vs,
@@ -129,8 +129,8 @@ class FaissKBService(KBService):
 
 
 if __name__ == "__main__":
-    faissService = FaissKBService("test")
-    faissService.add_doc(KnowledgeFile("README.md", "test"))
-    faissService.delete_doc(KnowledgeFile("README.md", "test"))
-    faissService.do_drop_kb()
-    print(faissService.search_docs("如何启动api服务"))
+    faissService = FaissKBService("samples")
+    faissService.add_doc(KnowledgeFile("test.txt", "samples"))
+    # faissService.delete_doc(KnowledgeFile("README.md", "test"))
+    # faissService.do_drop_kb()
+    print(faissService.search_docs("如何向 ChatGPT 提问以获得高质量答案：提示技巧工程完全指南",top_k=10,score_threshold=-1))

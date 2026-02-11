@@ -47,6 +47,7 @@ logger = build_logger()
 
 class SupportedVSType:
     FAISS = "faiss"
+    CHROMADB = "chromadb"
 
 
 class KBService(ABC):
@@ -360,6 +361,8 @@ class KBServiceFactory:
         embed_model: str = get_default_embedding(),
         kb_info: str = None,
     ) -> KBService:
+        if isinstance(vector_store_type, str):
+            vector_store_type = getattr(SupportedVSType, vector_store_type.upper())
         params = {
             "knowledge_base_name": kb_name,
             "embed_model": embed_model,
@@ -377,11 +380,7 @@ class KBServiceFactory:
         _, vs_type, embed_model = load_kb_from_db(kb_name)
         if _ is None:  # kb not in db, just return None
             return None
-        return KBServiceFactory.get_service(kb_name, embed_model)
-
-    @staticmethod
-    def get_default():
-        return KBServiceFactory.get_service("default", SupportedVSType.DEFAULT)
+        return KBServiceFactory.get_service(kb_name, vs_type, embed_model)
 
 
 def get_kb_details() -> List[Dict]:
