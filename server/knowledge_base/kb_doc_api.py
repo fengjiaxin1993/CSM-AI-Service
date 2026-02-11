@@ -67,7 +67,7 @@ def search_docs(
             description="知识库匹配相关度阈值，取值范围在-1-1之间，"
                         "SCORE越大，相关度越高，"
                         "取到-1相当于不筛选，建议设置在0.3左右",
-            ge=0.0,
+            ge=-1.0,
             le=1.0,
         ),
         file_name: str = Body("", description="文件名称，支持 sql 通配符"),
@@ -78,6 +78,7 @@ def search_docs(
     if kb is not None:
         if query:
             docs = kb.search_docs(query, top_k, score_threshold)
+            print(docs)
             # data = [DocumentWithVSId(**x[0].dict(), score=x[1], id=x[0].metadata.get("id")) for x in docs]
             data = [DocumentWithVSId(**x.dict(), id=x.metadata.get("id")) for x in docs]
         elif file_name or metadata:
@@ -408,7 +409,7 @@ def recreate_vector_store(
     """
 
     def output():
-        kb = KBServiceFactory.get_service(knowledge_base_name, vs_type, embed_model)
+        kb = KBServiceFactory.get_service(knowledge_base_name, embed_model)
         if not kb.exists() and not allow_empty_kb:
             yield {"code": 404, "msg": f"未找到知识库 ‘{knowledge_base_name}’"}
         else:

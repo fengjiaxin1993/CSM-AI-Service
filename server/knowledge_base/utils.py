@@ -33,7 +33,6 @@ def validate_kb_name(knowledge_base_id: str) -> bool:
 def get_kb_path(knowledge_base_name: str):
     return os.path.join(Settings.basic_settings.KB_ROOT_PATH, knowledge_base_name)
 
-
 def get_user_path(user_id: str):
     return os.path.join(Settings.basic_settings.USER_ROOT_PATH, user_id)
 

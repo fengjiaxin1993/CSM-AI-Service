@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import typing as t
 from pydantic_settings_file import *
+
 # chatchat 数据目录，必须通过环境变量设置。如未设置则自动使用当前目录。
 CHATCHAT_ROOT = Path(".").resolve()
 
@@ -37,13 +38,6 @@ class BasicSettings(BaseFileSettings):
 
     # @computed_field
     @cached_property
-    def IMG_DIR(self) -> Path:
-        """项目相关图片目录"""
-        p = self.PACKAGE_ROOT / "img"
-        return p
-
-    # @computed_field
-    @cached_property
     def NLTK_DATA_PATH(self) -> Path:
         """nltk 模型存储路径"""
         p = self.DATA_PATH / "nltk_data"
@@ -65,6 +59,9 @@ class BasicSettings(BaseFileSettings):
 
     KB_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/knowledge_base")
     """知识库默认存储路径"""
+
+    WARNING_KNOWLEDGE_PATH: str = str(CHATCHAT_ROOT / "data/warning_knowledge")
+    """告警知识库默认存储路径， 与通用知识库不通，有特定处理"""
 
     USER_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/user")
     """记录用户历史对话记录的存储路径"""
@@ -101,6 +98,7 @@ class BasicSettings(BaseFileSettings):
             p.mkdir(parents=True, exist_ok=True)
         Path(self.KB_ROOT_PATH).mkdir(parents=True, exist_ok=True)
         Path(self.USER_ROOT_PATH).mkdir(parents=True, exist_ok=True)
+        Path(self.WARNING_KNOWLEDGE_PATH).mkdir(parents=True, exist_ok=True)
 
 
 class KBSettings(BaseFileSettings):
@@ -110,6 +108,9 @@ class KBSettings(BaseFileSettings):
 
     DEFAULT_KNOWLEDGE_BASE: str = "samples"
     """默认使用的知识库"""
+
+    WARNING_KNOWLEDGE: str = "warning"
+    """默认的告警知识库"""
 
     DEFAULT_VS_TYPE: str = "faiss"
     """默认使用faiss向量数据库"""
@@ -266,7 +267,29 @@ class PromptSettings(BaseFileSettings):
             "AI:"
         ),
     }
-    '''普通 LLM 用模板'''
+    '''告警电力解析提示词'''
+    warning: dict = {
+        "default": (
+            "你是电力行业告警处置报告审核专家，严格遵循《电力监控系统安全防护规定》《网络安全法》，审核以下报告:\n"
+            "【研判维度】\n"
+            "1. 处置合规性：处置步骤是否清晰可追溯，处置结果是否明确\n"
+            "2. 原因分析有效性：原因是否明确，无模糊表述\n"
+            "3. 整改闭环：整改措施具体可执行\n"
+            "4. 历史一致性：与同类告警处置方案无矛盾，差异需说明合理原因\n"
+            "【同类电力告警参考】\n"
+            "{{retrieved_info}}\n"
+            "【本次待审核报告】\n"
+            "{{report_info}}\n"
+
+            "【输出要求】严格按以下JSON格式返回，key的字段一定要匹配，语言贴合电力运维场景：\n"
+            "{"
+            "'audit_result': '通过/驳回/需人工复核',\n"
+            "'audit_details': '从不同维度说明审核结果',\n"
+            "'summary': '报告核心总结（100字内，含告警类型、处置结果、合规情况）',\n"
+            "'reject_reason': '驳回需说明具体修改要求，否则为空',\n"
+            "'power_suggestion': '电力行业专属优化建议'\n"
+            "} ")
+    }
 
     rag: dict = {
         "default": (

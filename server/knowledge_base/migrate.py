@@ -44,7 +44,7 @@ def file_to_kbfile(kb_name: str, files: List[str]) -> List[KnowledgeFile]:
 def folder2db(
         kb_names: List[str],
         mode: Literal["recreate_vs", "update_in_db", "increment"],
-        vs_type: Literal["faiss"] = Settings.kb_settings.DEFAULT_VS_TYPE,
+        vs_type: Literal["chromadb"] = Settings.kb_settings.DEFAULT_VS_TYPE,
         embed_model: str = Settings.model_settings.DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = Settings.kb_settings.CHUNK_SIZE,
         chunk_overlap: int = Settings.kb_settings.OVERLAP_SIZE,

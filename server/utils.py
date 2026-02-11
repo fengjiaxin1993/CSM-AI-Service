@@ -363,7 +363,8 @@ def get_Embeddings(
             )
         else:
             base_embeddings = LocalAIEmbeddings(**params)
-        return NormalizedEmbeddings(base_embeddings)
+        # return NormalizedEmbeddings(base_embeddings)
+        return base_embeddings
     except Exception as e:
         logger.error(
             f"failed to create Embeddings for model: {embed_model}.", exc_info=True
