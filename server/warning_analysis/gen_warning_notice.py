@@ -1,13 +1,12 @@
 import os
-import tempfile
-from docxtpl import DocxTemplate  # 增强版模板填充，适配表格/多段文本
-from docx2pdf import convert
 from datetime import datetime
 
 from fastapi import HTTPException
 
 from server.utils import build_logger
+from server.warning_analysis.convert_tools import generate_word_from_data, word2pdf, delete_pdf_text
 from settings import Settings
+
 logger = build_logger()
 
 WARNING_TEMPLATE_NAME = "warning_notice_template.docx"
@@ -41,35 +40,32 @@ def generate_pdf_from_data(data: dict) -> str:
 
     suffix_name = f"整改通知单-{data['notice_no']}"
     word_name = suffix_name + ".docx"
+    middle_name = suffix_name + "_temp.pdf"
     pdf_name = suffix_name + ".pdf"
-    temp_word_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, word_name)
-    temp_pdf_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, pdf_name)
+
+    word_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, word_name)
+    middle_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, middle_name)
+    pdf_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, pdf_name)
 
     try:
-        # 4. 加载模板并填充数据
-        tpl = DocxTemplate(TEMPLATE_PATH)
-        # 关键优化1：将多行文本的\n转换为Word的换行符（<w:br/>），避免手动换行导致格式错乱
-        for key, value in data.items():
-            if isinstance(value, str) and "\n" in value:
-                data[key] = value.replace("\n", "<br/>")
-        # 关键优化2：使用RichText渲染，保留原模板的段落/单元格样式
-        tpl.render(data, autoescape=False)
-        tpl.save(temp_word_path)
+        # 1.生成word文件
+        generate_word_from_data(data, TEMPLATE_PATH, word_path)
+        # 2.生成pdf(带水印)
+        word2pdf(word_path, middle_path)
+        # 3. 删除水印
+        text_to_delete = "Evaluation Warning: The document was created with Spire.Doc for Python"
+        delete_pdf_text(middle_path, pdf_path, text_to_delete)
 
-        # 5. 跨平台转换为PDF（docx2pdf自动适配系统）
-        convert(temp_word_path, temp_pdf_path)
-
-        # 6. 校验PDF是否生成成功
-        if not os.path.exists(temp_pdf_path):
+        if not os.path.exists(pdf_path):
             raise Exception("PDF文件生成失败，未找到生成的文件")
-        # for f in [temp_word_path]:
-        #     if os.path.exists(f):
-        #         os.remove(f)
-        return temp_pdf_path
+        for f in [word_path, middle_path]:
+            if os.path.exists(f):
+                os.remove(f)
+        return pdf_path
 
     except Exception as e:
         # 异常时清理临时文件
-        for f in [temp_word_path, temp_pdf_path]:
+        for f in [word_path, middle_path]:
             if os.path.exists(f):
                 os.remove(f)
         raise HTTPException(status_code=500, detail=f"PDF生成失败：{str(e)}")
