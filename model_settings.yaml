@@ -1,0 +1,55 @@
+# 模型配置项
+
+
+# 默认选用的 LLM 名称
+DEFAULT_LLM_MODEL: qwen2.5:0.5b
+
+# 默认选用的 Embedding 名称
+DEFAULT_EMBEDDING_MODEL: quentinz/bge-small-zh-v1.5
+
+# 默认历史对话轮数
+HISTORY_LEN: 3
+
+# 大模型最长支持的长度，如果不填写，则使用模型默认的最大长度，如果填写，则为用户设定的最大长度
+MAX_TOKENS: 4096
+
+# LLM通用对话参数
+TEMPERATURE: 0.7
+
+# LLM模型配置，包括了不同模态初始化参数。
+# `model` 如果留空则自动使用 DEFAULT_LLM_MODEL
+LLM_MODEL_CONFIG:
+  llm_model:
+    model: ''
+    prompt_name: default
+
+# # 模型加载平台配置
+
+
+# # 平台名称
+# platform_name: ollama
+
+# # 平台类型
+# # 可选值：['ollama', 'openai']
+# platform_type: ollama
+
+# # openai api url
+# api_base_url: http://127.0.0.1:11434/v1
+
+# # api key if available
+# api_key: EMPTY
+
+# # 该平台支持的大语言模型列表
+# llm_models: []
+
+# # 该平台支持的嵌入模型列表
+# embed_models: []
+MODEL_PLATFORMS:
+  - platform_name: ollama
+    platform_type: ollama
+    api_base_url: http://127.0.0.1:11434/v1
+    api_key: EMPTY
+    llm_models:
+      - qwen2.5:0.5b
+    embed_models:
+      - quentinz/bge-small-zh-v1.5
