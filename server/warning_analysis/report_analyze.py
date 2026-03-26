@@ -1,44 +1,60 @@
 import hashlib
 import json
 import os
-from typing import List, Optional
+import uuid
+from typing import List, Optional, Tuple
 from json_repair import repair_json
 from fastapi import Body, UploadFile, File
 from langchain_core.prompts import ChatPromptTemplate
 from server.chat.utils import History
-from server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, BaseResponse
-from server.warning_analysis.chromadb_kb_service import ChromaKBService, DDoc
-from server.warning_analysis.extract_pdf_info import PowerAlarmReportParser
+from server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, BaseResponse, get_default_embedding
+from langchain.docstore.document import Document
+
+from server.warning_analysis.extract_info.pdfAlarmReportParser import PDFAlarmReportParser
+from server.warning_analysis.extract_info.scanPdfAlarmReportParser import ScannedPdfReportParser
+from server.warning_analysis.extract_info.wordAlarmReportParser import WORDAlarmReportParser
+from server.warning_analysis.safe_chroma import SafeChromaDB
 from settings import Settings
-from server.utils import build_logger
+from utils import build_logger
 
 # 知识库插入、搜索
 logger = build_logger()
 
+GLOBAL_WARNING_CHROMA_DB = SafeChromaDB(
+    db_path=Settings.basic_settings.WARNING_KNOWLEDGE_PATH,
+    collection_name=Settings.kb_settings.WARNING_KNOWLEDGE,
+    embed_model=get_default_embedding(),
+    is_temp=False
+)
+
 
 # 从告警库中搜索相关告警信息
-def search_alarm(alarm_desc: str) -> List[tuple[DDoc, float]]:
-    kb_service = ChromaKBService(Settings.kb_settings.WARNING_KNOWLEDGE)
-    doc_list = kb_service.query(query=alarm_desc,
-                                top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K,
-                                score_threshold=Settings.kb_settings.SCORE_THRESHOLD)
-    return doc_list
+def search_alarm(alarm_desc: str,
+                 top_k: int,
+                 score_threshold: float) -> List[Tuple[Document, float]]:
+    # 执行查询
+    docs_with_scores = GLOBAL_WARNING_CHROMA_DB.search(
+        query=alarm_desc,
+        top_k=top_k,
+        score_threshold=score_threshold
+    )
+    return docs_with_scores
 
 
 # 组装 prompt
-def rag_retrieve(alarm_desc: str):
-    ddoc_list = search_alarm(alarm_desc)
+def construct_rag_prompt(alarm_desc: str, top_k: int, score_threshold: float):
+    docs_with_scores = search_alarm(alarm_desc, top_k, score_threshold)
     """电力行业RAG双层检索，返回同类告警参考"""
-    if not ddoc_list:
+    if not docs_with_scores:
         return "未检索到同类电力告警处置报告"
 
     # 整理电力专属参考格式
     final_retrieve = "【同类电力告警处置参考】\n"
-    for idx, ddoc, sim in enumerate(ddoc_list):
+    for idx, ddoc, sim in enumerate(docs_with_scores):
         final_retrieve += f"""
     第{idx}条（相似度：{sim}）：
     
-    告警信息描述：{ddoc.doc} 设备名称：{ddoc.meta["设备名称"]} 设备类型：{ddoc.meta["设备类型"]}
+    告警信息描述：{ddoc.page_content} 设备名称：{ddoc.meta["设备名称"]} 设备类型：{ddoc.meta["设备类型"]}
     处置过程：{ddoc.meta["处置过程"]}
     原因分析：{ddoc.meta["原因分析"]}
     整改情况：{ddoc.meta["整改情况"]}
@@ -57,10 +73,12 @@ def compute_str_md5(name: str) -> str:
 # 保存，返回临时路径
 def save_to_temp_file(file: UploadFile):
     file_content = file.file.read()  # 读取上传文件的内容
-    # prefix, suffix = os.path.splitext(file.filename)
+    prefix, suffix = os.path.splitext(file.filename)
     # new_file_prefix = compute_str_md5(prefix)
     # new_file_name = new_file_prefix + "." + suffix
     new_file_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, file.filename)
+    if os.path.exists(new_file_path):
+        os.remove(new_file_path)
     with open(new_file_path, "wb") as f:
         f.write(file_content)
     return str(new_file_path)
@@ -121,17 +139,41 @@ def check_report(dic) -> tuple[bool, list]:
     return len(empty_list) == 0, empty_list
 
 
+def extract_dic_from_file(file_path: str, ext: str):
+    result = {}
+    if ext == ".docx":
+        parser = WORDAlarmReportParser(file_path)
+        result = parser.parse()
+    elif ext == ".pdf":
+        parser = PDFAlarmReportParser(file_path)
+        result = parser.parse()
+        flag, empty_list = check_report(result)
+        if not flag:  # 尝试
+            parser = ScannedPdfReportParser(file_path)
+            result = parser.parse()
+    return result
+
+
 # 一次性返回研判结果
 def warning_analyze(file: UploadFile = File(..., description="上传文件"),
                     model: str = Body(get_default_llm(), description="LLM 模型名称。"),
                     max_tokens: Optional[int] = Body(
                         Settings.model_settings.MAX_TOKENS,
                         description="限制LLM生成Token数量，默认None代表模型最大值"
+                    ),
+                    top_k: Optional[int] = Body(
+                        Settings.kb_settings.VECTOR_SEARCH_TOP_K,
+                        description="最多搜索top_k条相似告警"
+                    ),
+                    score_threshold: Optional[float] = Body(
+                        Settings.kb_settings.SCORE_THRESHOLD,
+                        description="相似度阈值"
                     )) -> BaseResponse:
     new_file_path = save_to_temp_file(file)
+    result = None
+    ext = os.path.splitext(file.filename)[-1].lower()
     try:
-        parser = PowerAlarmReportParser(new_file_path)
-        result = parser.parse()
+        result = extract_dic_from_file(new_file_path, ext)
     except Exception as e:
         return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}")
 
@@ -140,7 +182,8 @@ def warning_analyze(file: UploadFile = File(..., description="上传文件"),
         empty_str = ",".join(empty_list)
         return BaseResponse(code=204, msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}")
 
-    rag_retrieve_info = rag_retrieve(alarm_desc=result["告警信息"])
+    rag_retrieve_info = construct_rag_prompt(alarm_desc=result["告警信息"], top_k=top_k,
+                                             score_threshold=score_threshold)
     report_info = json.dumps(result, ensure_ascii=False, indent=2)
     llm = get_ChatOpenAI(
         model_name=model,
@@ -161,3 +204,27 @@ def warning_analyze(file: UploadFile = File(..., description="上传文件"),
     res_dic = normalize_warning_output(content)
     print(res_dic)
     return BaseResponse(data=res_dic)
+
+
+# 保存处置报告
+def save_warning_report(file: UploadFile = File(..., description="上传文件"),
+                        ) -> BaseResponse:
+    new_file_path = save_to_temp_file(file)
+    result = {}
+    ext = os.path.splitext(file.filename)[-1].lower()
+    try:
+        result = extract_dic_from_file(new_file_path, ext)
+    except Exception as e:
+        return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}")
+
+    flag, empty_list = check_report(result)
+    if not flag:
+        empty_str = ",".join(empty_list)
+        return BaseResponse(code=204, msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}")
+
+    # 准备数据
+    texts = [result["告警信息"]]
+    metadatas = [result]
+    ids = [str(uuid.uuid1()) for _ in range(len(texts))]
+    GLOBAL_WARNING_CHROMA_DB.add(ids=ids, metadatas=metadatas, texts=texts)
+    return BaseResponse(code=200, msg="保存成功")

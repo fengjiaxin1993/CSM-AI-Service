@@ -68,15 +68,22 @@ class FaissKBService(KBService):
         query: str,
         top_k: int,
         score_threshold: float = Settings.kb_settings.SCORE_THRESHOLD,
-    ) -> List[Document]:
+    ) -> List[Tuple[Document, float]]:
+        """
+        搜索相似文档并返回文档及相似度分数
+        
+        Returns:
+            List[Tuple[Document, float]]: (文档, 相似度分数) 列表，分数越小越相似
+        """
         with self.load_vector_store().acquire() as vs:
-            retriever = get_Retriever("vectorstore").from_vectorstore(
-                vs,
-                top_k=top_k,
-                score_threshold=score_threshold,
-            )
-            docs = retriever.get_relevant_documents(query)
-        return docs
+            # 使用 similarity_search_with_score 获取带分数的结果
+            docs_with_scores = vs.similarity_search_with_score(query, k=top_k)
+            # 过滤低于阈值的结果（FAISS中分数越小越相似，L2距离）
+            filtered_docs = [
+                (doc, score) for doc, score in docs_with_scores
+                if score >= score_threshold
+            ]
+        return filtered_docs
 
     def do_add_doc(
         self,
@@ -133,4 +140,6 @@ if __name__ == "__main__":
     faissService.add_doc(KnowledgeFile("test.txt", "samples"))
     # faissService.delete_doc(KnowledgeFile("README.md", "test"))
     # faissService.do_drop_kb()
-    print(faissService.search_docs("如何向 ChatGPT 提问以获得高质量答案：提示技巧工程完全指南",top_k=10,score_threshold=-1))
+    results = faissService.search_docs("如何向 ChatGPT 提问以获得高质量答案：提示技巧工程完全指南", top_k=10, score_threshold=-1)
+    for doc, score in results:
+        print(f"Score: {score}, Content: {doc.page_content[:50]}...")

@@ -208,7 +208,7 @@ class KBService(ABC):
         query: str,
         top_k: int = Settings.kb_settings.VECTOR_SEARCH_TOP_K,
         score_threshold: float = Settings.kb_settings.SCORE_THRESHOLD,
-    ) -> List[Document]:
+    ) -> List[Tuple[Document, float]]:
         if not self.check_embed_model(
             f"could not search docs because failed to access embed model."
         ):

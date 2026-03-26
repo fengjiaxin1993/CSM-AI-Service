@@ -1,14 +1,10 @@
 from __future__ import annotations
-from server.chat.similar_mem_chat import similar_mem_chat
 from fastapi import APIRouter, Request, Body
-from server.chat.chat import chat
-from server.chat.kb_chat import kb_chat
-from utils import build_logger
-from ..chat.mem_chat import mem_chat
 from fastapi.responses import FileResponse
 
-from ..warning_analysis.gen_warning_notice import generate_pdf_from_data
-from ..warning_analysis.warning_api import warning_analyze
+from utils import build_logger
+from ..warning_analysis.gen_notice import generate_doc_from_data
+from ..warning_analysis.report_analyze import warning_analyze, save_warning_report
 
 logger = build_logger()
 
@@ -21,10 +17,10 @@ warning_router.post(
 
 
 @warning_router.post(
-    "/generate_notice",
-    summary="生成整改通知单",
+    "/generate_notice_doc",
+    summary="生成整改通知单-doc",
     response_class=FileResponse)
-def generate_rectification_notice_pdf(
+def generate_rectification_notice_doc(
         data: dict = Body(
             ...,
             description="整改通知单填充数据，JSON格式，字段与模板占位符一致",
@@ -50,20 +46,10 @@ def generate_rectification_notice_pdf(
             }
         )
 ):
-    """
-    生成电力监控系统网络安全隐患整改通知单PDF接口
-    - 请求方式：POST
-    - 请求体：JSON格式填充数据
-    - 返回：PDF文件流（可直接下载，文件名自动生成为「整改通知单-编号.pdf」）
-    """
-    # 生成PDF临时文件
-    pdf_path = generate_pdf_from_data(data)
-    # 自定义下载文件名
-    download_name = f"整改通知单-{data['notice_no']}.pdf"
-    # 返回PDF文件流，响应完成后自动删除临时文件
-    return FileResponse(
-        path=pdf_path,
-        media_type="application/pdf",
-        filename=download_name,
-        background=None  # 自动清理临时文件
-    )
+    return generate_doc_from_data(data)
+
+
+warning_router.post(
+    "/save_warning_report",
+    summary="保存报告处置建议文档",
+)(save_warning_report)

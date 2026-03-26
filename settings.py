@@ -81,6 +81,9 @@ class BasicSettings(BaseFileSettings):
     OPEN_CROSS_DOMAIN: bool = True
     """API 是否开启跨域"""
 
+    DEBUG: bool = True
+    """doc的 api 是否web页面可以查看"""
+
     DEFAULT_BIND_HOST: str = "0.0.0.0" if sys.platform != "win32" else "127.0.0.1"
     """
     各服务器默认绑定host。如改为"0.0.0.0"需要修改下方所有XX_SERVER的host

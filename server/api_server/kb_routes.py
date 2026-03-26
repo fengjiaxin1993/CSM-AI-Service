@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import List, Literal
+from typing import List
 
-from fastapi import APIRouter, Request
-
-from settings import Settings
-from server.api_server.api_schemas import OpenAIChatInput, OpenAIChatOutput
-from server.chat.kb_chat import kb_chat, upload_temp_docs
+from fastapi import APIRouter
+from server.chat.kb_chat import upload_temp_docs
 from server.knowledge_base.kb_api import create_kb, delete_kb, list_kbs
 from server.knowledge_base.kb_doc_api import (
     delete_docs,
@@ -21,41 +18,9 @@ from server.knowledge_base.kb_doc_api import (
 )
 
 from server.utils import BaseResponse, ListResponse
-from server.knowledge_base.kb_cache.faiss_cache import memo_faiss_pool
 
 
 kb_router = APIRouter(prefix="/knowledge_base", tags=["Knowledge Base Management"])
-
-
-@kb_router.post(
-    "/{mode}/{param}/chat/completions", summary="知识库对话，openai 兼容，参数与 /chat/kb_chat 一致"
-)
-async def kb_chat_endpoint(
-    mode: Literal["local_kb", "temp_kb"],
-    param: str,
-    body: OpenAIChatInput,
-    request: Request,
-):
-    # import rich
-    # rich.print(body)
-
-    extra = body.model_extra
-    ret = await kb_chat(
-        query=body.messages[-1]["content"],
-        mode=mode,
-        kb_name=param,
-        top_k=extra.get("top_k", Settings.kb_settings.VECTOR_SEARCH_TOP_K),
-        score_threshold=extra.get("score_threshold", Settings.kb_settings.SCORE_THRESHOLD),
-        history=body.messages[:-1],
-        stream=body.stream,
-        model=body.model,
-        temperature=body.temperature,
-        max_tokens=body.max_tokens,
-        prompt_name=extra.get("prompt_name", "default"),
-        return_direct=extra.get("return_direct", False),
-        request=request,
-    )
-    return ret
 
 
 kb_router.get(
