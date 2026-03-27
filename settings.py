@@ -63,6 +63,12 @@ class BasicSettings(BaseFileSettings):
         p = self.DATA_PATH / "temp"
         return p
 
+    @cached_property
+    def WARNING_NOTICE_DIR(self) -> Path:
+        """整改通知单路径"""
+        p = self.DATA_PATH / "warning_notice"
+        return p
+
     KB_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/knowledge_base")
     """知识库默认存储路径"""
 
