@@ -47,7 +47,6 @@ logger = build_logger()
 
 class SupportedVSType:
     FAISS = "faiss"
-    CHROMADB = "chromadb"
 
 
 class KBService(ABC):

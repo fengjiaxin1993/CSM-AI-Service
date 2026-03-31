@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 
 from utils import build_logger
 from server.warning_analysis.gen_notice import generate_doc_from_data
-from server.warning_analysis.report_analyze import warning_analyze, save_warning_report
+from server.warning_analysis.report_analyze import warning_analyze, save_warning_report, delete_warning_report
 
 logger = build_logger()
 
@@ -52,5 +52,11 @@ def generate_rectification_notice_doc(
 
 warning_router.post(
     "/save_warning_report",
-    summary="保存报告处置建议文档",
+    summary="保存告警处置报告",
 )(save_warning_report)
+
+
+warning_router.post(
+    "/delete_warning_report",
+    summary="删除告警处置报告",
+)(delete_warning_report)

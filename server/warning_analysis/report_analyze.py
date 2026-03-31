@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import uuid
 from typing import List, Optional, Tuple
 from json_repair import repair_json
 from fastapi import Body, UploadFile, File
@@ -13,27 +12,50 @@ from langchain.docstore.document import Document
 from server.warning_analysis.extract_info.pdfAlarmReportParser import PDFAlarmReportParser
 from server.warning_analysis.extract_info.scanPdfAlarmReportParser import ScannedPdfReportParser
 from server.warning_analysis.extract_info.wordAlarmReportParser import WORDAlarmReportParser
-from server.warning_analysis.safe_chroma import SafeChromaDB
+from server.knowledge_base.kb_service.base import KBServiceFactory
 from settings import Settings
 from utils import build_logger
+from server.knowledge_base.utils import (
+    KnowledgeFile,
+    get_file_path,
+)
 
 # 知识库插入、搜索
 logger = build_logger()
 
-GLOBAL_WARNING_CHROMA_DB = SafeChromaDB(
-    db_path=Settings.basic_settings.WARNING_KNOWLEDGE_PATH,
-    collection_name=Settings.kb_settings.WARNING_KNOWLEDGE,
-    embed_model=get_default_embedding(),
-    is_temp=False
-)
+
+def _get_or_create_warning_kb():
+    """获取或创建告警知识库服务实例"""
+    kb_name = Settings.kb_settings.WARNING_KNOWLEDGE
+    kb = KBServiceFactory.get_service_by_name(kb_name)
+    if kb is None:
+        # 知识库不存在，自动创建
+        logger.info(f"告警知识库 {kb_name} 不存在，正在自动创建...")
+        kb = KBServiceFactory.get_service(
+            kb_name=kb_name,
+            vector_store_type=Settings.kb_settings.DEFAULT_VS_TYPE,
+            embed_model=get_default_embedding(),
+            kb_info="电力行业告警处置报告知识库"
+        )
+        try:
+            kb.create_kb()
+            logger.info(f"告警知识库 {kb_name} 创建成功")
+        except Exception as e:
+            logger.error(f"创建告警知识库失败: {str(e)}")
+            return None
+    return kb
 
 
 # 从告警库中搜索相关告警信息
 def search_alarm(alarm_desc: str,
                  top_k: int,
                  score_threshold: float) -> List[Tuple[Document, float]]:
+    kb = _get_or_create_warning_kb()
+    if kb is None:
+        logger.warning("告警知识库不存在，请先创建")
+        return []
     # 执行查询
-    docs_with_scores = GLOBAL_WARNING_CHROMA_DB.search(
+    docs_with_scores = kb.search_docs(
         query=alarm_desc,
         top_k=top_k,
         score_threshold=score_threshold
@@ -50,15 +72,15 @@ def construct_rag_prompt(alarm_desc: str, top_k: int, score_threshold: float):
 
     # 整理电力专属参考格式
     final_retrieve = "【同类电力告警处置参考】\n"
-    for idx, ddoc, sim in enumerate(docs_with_scores):
+    for idx, (ddoc, sim) in enumerate(docs_with_scores):
         final_retrieve += f"""
     第{idx}条（相似度：{sim}）：
     
-    告警信息描述：{ddoc.page_content} 设备名称：{ddoc.meta["设备名称"]} 设备类型：{ddoc.meta["设备类型"]}
-    处置过程：{ddoc.meta["处置过程"]}
-    原因分析：{ddoc.meta["原因分析"]}
-    整改情况：{ddoc.meta["整改情况"]}
-    防范措施：{ddoc.meta["防范措施"]}
+    告警信息描述：{ddoc.page_content} 设备名称：{ddoc.metadata.get("设备名称", "")} 设备类型：{ddoc.metadata.get("设备类型", "")}
+    处置过程：{ddoc.metadata.get("处置过程", "")}
+    原因分析：{ddoc.metadata.get("原因分析", "")}
+    整改情况：{ddoc.metadata.get("整改情况", "")}
+    防范措施：{ddoc.metadata.get("防范措施", "")}
     ----------------------
     """
     return final_retrieve
@@ -73,7 +95,7 @@ def compute_str_md5(name: str) -> str:
 # 保存，返回临时路径
 def save_to_temp_file(file: UploadFile):
     file_content = file.file.read()  # 读取上传文件的内容
-    prefix, suffix = os.path.splitext(file.filename)
+    # prefix, suffix = os.path.splitext(file.filename)
     # new_file_prefix = compute_str_md5(prefix)
     # new_file_name = new_file_prefix + "." + suffix
     new_file_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, file.filename)
@@ -82,6 +104,15 @@ def save_to_temp_file(file: UploadFile):
     with open(new_file_path, "wb") as f:
         f.write(file_content)
     return str(new_file_path)
+
+
+def save_to_target_file(file: UploadFile, target_file_path):
+    file_content = file.file.read()  # 读取上传文件的内容
+    if os.path.exists(target_file_path):
+        os.remove(target_file_path)
+    with open(target_file_path, "wb") as f:
+        f.write(file_content)
+    return str(target_file_path)
 
 
 # 修复大模型输出库
@@ -196,35 +227,112 @@ def warning_analyze(file: UploadFile = File(..., description="上传文件"),
     input_msg = History(role="user", content=prompt_template).to_msg_template(False)
     chat_prompt = ChatPromptTemplate.from_messages([input_msg])
     prompt = chat_prompt.invoke({"retrieved_info": rag_retrieve_info, "report_info": report_info})
-    print(prompt.to_string())
+    # print(prompt.to_string())
     response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
     content = response.content  # 核心：提取完整回答文本
-    print(content)
+    # print(content)
     res_dic = normalize_warning_output(content)
-    print(res_dic)
+    # print(res_dic)
     return BaseResponse(data=res_dic)
 
 
 # 保存处置报告
-def save_warning_report(file: UploadFile = File(..., description="上传文件"),
-                        ) -> BaseResponse:
-    new_file_path = save_to_temp_file(file)
+def save_warning_report(
+        warning_number: str = Body("test", description="告警编号"),
+        file: UploadFile = File(..., description="上传文件"),
+) -> BaseResponse:
+
+    target_file_path = get_file_path(
+        knowledge_base_name=Settings.kb_settings.WARNING_KNOWLEDGE, doc_name=file.filename
+    )
+    save_to_target_file(file, target_file_path)
     result = {}
     ext = os.path.splitext(file.filename)[-1].lower()
     try:
-        result = extract_dic_from_file(new_file_path, ext)
+        result = extract_dic_from_file(target_file_path, ext)
     except Exception as e:
-        return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}")
+        return BaseResponse(code=200, msg=f"解析{file.filename}失败，报错信息{e}，暂时不存在向量库中")
 
     flag, empty_list = check_report(result)
     if not flag:
         empty_str = ",".join(empty_list)
-        return BaseResponse(code=204, msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}")
+        return BaseResponse(code=200,
+                            msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}，暂时不存在向量库中")
 
-    # 准备数据
-    texts = [result["告警信息"]]
-    metadatas = [result]
-    ids = [str(uuid.uuid1()) for _ in range(len(texts))]
-    GLOBAL_WARNING_CHROMA_DB.add(ids=ids, metadatas=metadatas, texts=texts)
-    return BaseResponse(code=200, msg="保存成功")
+    # 获取告警知识库服务
+    kb = _get_or_create_warning_kb()
+    if kb is None:
+        return BaseResponse(code=500, msg="告警知识库创建失败")
+
+    # 加入告警编号信息
+    result["warning_number"] = warning_number
+    # 构建 Document 对象
+    doc = Document(
+        page_content=result["告警信息"],
+        metadata=result
+    )
+
+    # 创建虚拟文件对象用于 add_doc
+    kb_file = KnowledgeFile(
+        filename=file.filename,
+        knowledge_base_name=Settings.kb_settings.WARNING_KNOWLEDGE
+    )
+
+    # 使用 KBService 的 add_doc 方法，传入自定义 docs
+    try:
+        status = kb.add_doc(kb_file, docs=[doc])
+        if status:
+            return BaseResponse(code=200, msg="保存成功")
+        else:
+            return BaseResponse(code=500, msg="保存到知识库失败")
+    except Exception as e:
+        logger.error(f"保存告警报告到知识库失败: {str(e)}")
+        return BaseResponse(code=500, msg=f"保存失败: {str(e)}")
+
+
+# 根据告警编号删除知识库中的文档
+def delete_warning_report(
+        warning_number: str = Body("test", description="告警编号"),
+) -> BaseResponse:
+    """根据告警编号从知识库中删除对应的告警处置报告"""
+    if not warning_number or not warning_number.strip():
+        return BaseResponse(code=400, msg="告警编号不能为空")
+
+    # 获取告警知识库服务
+    kb = _get_or_create_warning_kb()
+    if kb is None:
+        return BaseResponse(code=404, msg="告警知识库不存在")
+
+    # 根据告警编号检索文档
+    try:
+        docs = kb.list_docs(metadata={"warning_number": warning_number})
+        if not docs:
+            return BaseResponse(code=404, msg=f"未找到告警编号为 {warning_number} 的处置报告")
+        file_names = set()
+        for doc in docs:
+            file_names.add(doc.metadata['source'])
+        valid_file_names = []
+        for file_name in file_names:
+            if not kb.exist_doc(file_name):
+                continue
+            try:
+
+                kb_file = KnowledgeFile(
+                    filename=file_name, knowledge_base_name=Settings.kb_settings.WARNING_KNOWLEDGE
+                )
+                kb.delete_doc(kb_file, True, not_refresh_vs_cache=True)
+                valid_file_names.append(file_name)
+            except Exception as e:
+                msg = f"{file_name} 文件删除失败，错误信息：{e}"
+                logger.error(f"{e.__class__.__name__}: {msg}")
+
+            kb.save_vector_store()
+
+        return BaseResponse(
+            code=200, msg=f"文件删除完成", data={"delete_files": valid_file_names}
+        )
+
+    except Exception as e:
+        logger.error(f"根据告警编号删除文档失败: {str(e)}")
+        return BaseResponse(code=500, msg=f"删除失败: {str(e)}")
