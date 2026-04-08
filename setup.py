@@ -33,7 +33,8 @@ build_exe_options = {
     'packages': ['server','fastapi','uvicorn','openai','starlette','argparse','langchain',
                  'sqlalchemy','anyio','sse_starlette','markdown','pandas',
                  'langchain_community','langchain_core', 'tenacity','pydantic','fitz','contextlib',
-                 'memoization','ruamel','asyncio','unstructured'],  # 依赖的包，python自己无法找到的包
+                 'memoization','ruamel','asyncio','unstructured',
+                 'docxtpl','json_repair', 'rapidocr','wired_table_rec',],  # 依赖的包，python自己无法找到的包
     'excludes': [],  # 不包含那些包
     "include_files": include_files
 }

@@ -51,6 +51,8 @@ def get_user_vs_path(user_id: str, vector_name: str):
 
 def get_file_path(knowledge_base_name: str, doc_name: str):
     doc_path = Path(get_doc_path(knowledge_base_name)).resolve()
+    if not os.path.exists(doc_path):
+        os.makedirs(doc_path)
     file_path = (doc_path / doc_name).resolve()
     if str(file_path).startswith(str(doc_path)):
         return str(file_path)

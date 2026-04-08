@@ -10,7 +10,7 @@ from server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, B
 from langchain.docstore.document import Document
 
 from server.warning_analysis.extract_info.pdfAlarmReportParser import PDFAlarmReportParser
-from server.warning_analysis.extract_info.scanPdfAlarmReportParser import ScannedPdfReportParser
+# from server.warning_analysis.extract_info.scanPdfAlarmReportParser import ScannedPdfReportParser
 from server.warning_analysis.extract_info.wordAlarmReportParser import WORDAlarmReportParser
 from server.knowledge_base.kb_service.base import KBServiceFactory
 from settings import Settings
@@ -178,15 +178,16 @@ def extract_dic_from_file(file_path: str, ext: str):
     elif ext == ".pdf":
         parser = PDFAlarmReportParser(file_path)
         result = parser.parse()
-        flag, empty_list = check_report(result)
-        if not flag:  # 尝试
-            parser = ScannedPdfReportParser(file_path)
-            result = parser.parse()
+        # flag, empty_list = check_report(result)
+        # if not flag:  # 尝试
+        #     parser = ScannedPdfReportParser(file_path)
+        #     result = parser.parse()
     return result
 
 
 # 一次性返回研判结果
-def warning_analyze(file: UploadFile = File(..., description="上传文件"),
+def warning_analyze(warning_number: str = Body("test", description="告警编号"),
+                    file: UploadFile = File(..., description="上传文件"),
                     model: str = Body(get_default_llm(), description="LLM 模型名称。"),
                     max_tokens: Optional[int] = Body(
                         Settings.model_settings.MAX_TOKENS,
@@ -206,35 +207,37 @@ def warning_analyze(file: UploadFile = File(..., description="上传文件"),
     try:
         result = extract_dic_from_file(new_file_path, ext)
     except Exception as e:
-        return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}")
+        return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}", data=init_warning_fields())
 
     flag, empty_list = check_report(result)
     if not flag:
         empty_str = ",".join(empty_list)
-        return BaseResponse(code=204, msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}")
+        return BaseResponse(code=204, msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}", data=init_warning_fields())
+    try:
+        rag_retrieve_info = construct_rag_prompt(alarm_desc=result["告警信息"], top_k=top_k,
+                                                 score_threshold=score_threshold)
+        report_info = json.dumps(result, ensure_ascii=False, indent=2)
+        llm = get_ChatOpenAI(
+            model_name=model,
+            temperature=0.1,
+            max_tokens=max_tokens,
+        )
 
-    rag_retrieve_info = construct_rag_prompt(alarm_desc=result["告警信息"], top_k=top_k,
-                                             score_threshold=score_threshold)
-    report_info = json.dumps(result, ensure_ascii=False, indent=2)
-    llm = get_ChatOpenAI(
-        model_name=model,
-        temperature=0.1,
-        max_tokens=max_tokens,
-    )
+        prompt_template = get_prompt_template("warning", "default")
+        # 渲染提示词
+        input_msg = History(role="user", content=prompt_template).to_msg_template(False)
+        chat_prompt = ChatPromptTemplate.from_messages([input_msg])
+        prompt = chat_prompt.invoke({"retrieved_info": rag_retrieve_info, "report_info": report_info})
+        # print(prompt.to_string())
+        response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
-    prompt_template = get_prompt_template("warning", "default")
-    # 渲染提示词
-    input_msg = History(role="user", content=prompt_template).to_msg_template(False)
-    chat_prompt = ChatPromptTemplate.from_messages([input_msg])
-    prompt = chat_prompt.invoke({"retrieved_info": rag_retrieve_info, "report_info": report_info})
-    # print(prompt.to_string())
-    response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
-
-    content = response.content  # 核心：提取完整回答文本
-    # print(content)
-    res_dic = normalize_warning_output(content)
-    # print(res_dic)
-    return BaseResponse(data=res_dic)
+        content = response.content  # 核心：提取完整回答文本
+        # print(content)
+        res_dic = normalize_warning_output(content)
+        # print(res_dic)
+        return BaseResponse(data=res_dic)
+    except Exception as e:
+        return BaseResponse(code=202, msg=f"解析失败，报错信息{e}", data=init_warning_fields())
 
 
 # 保存处置报告
@@ -242,7 +245,6 @@ def save_warning_report(
         warning_number: str = Body("test", description="告警编号"),
         file: UploadFile = File(..., description="上传文件"),
 ) -> BaseResponse:
-
     target_file_path = get_file_path(
         knowledge_base_name=Settings.kb_settings.WARNING_KNOWLEDGE, doc_name=file.filename
     )
