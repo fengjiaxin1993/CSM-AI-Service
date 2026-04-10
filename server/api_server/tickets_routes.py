@@ -2,7 +2,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from utils import build_logger
-from server.ticket_analyze.affect_info import associate_device_type
+from server.csm_analyze.ticket_analyze.affect_info import associate_device_type
 
 logger = build_logger()
 

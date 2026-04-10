@@ -3,8 +3,8 @@ from fastapi import APIRouter, Body
 from fastapi.responses import FileResponse
 
 from utils import build_logger
-from server.warning_analysis.gen_notice import generate_doc_from_data
-from server.warning_analysis.report_analyze import warning_analyze, save_warning_report, delete_warning_report
+from server.csm_analyze.warning_analysis.gen_notice import generate_doc_from_data
+from server.csm_analyze.warning_analysis.report_analyze import warning_analyze, save_warning_report, delete_warning_report
 
 logger = build_logger()
 

@@ -10,7 +10,7 @@ from server.api_server.chat_routes import chat_router
 from server.api_server.kb_routes import kb_router
 from server.api_server.server_routes import server_router
 from server.utils import MakeFastAPIOffline
-
+from server.api_server.pdf_extract_routes import pdf_extract_router
 
 def create_app():
     app = FastAPI(title="Langchain-Chatchat API Server")
@@ -37,6 +37,7 @@ def create_app():
     app.include_router(server_router)
     app.include_router(warning_router)
     app.include_router(ticket_router)
+    app.include_router(pdf_extract_router)
 
     return app
 

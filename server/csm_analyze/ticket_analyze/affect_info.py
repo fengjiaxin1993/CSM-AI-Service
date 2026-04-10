@@ -45,14 +45,12 @@ def get_device_types(maintenance_object: str, affected_object: str, work_content
 
 
 def associate_device_type(
-        maintenance_object: str = Body("叶家河光储正向隔离装置",description="检修对象"),
-        affected_object: str = Body("叶家河光储正向隔离装置",description="影响对象"),
-        work_content: str = Body("需要重新配置叶家河光储正向隔离装置光功率预测相关策略",description="工作内容")
-    ) -> BaseResponse:
+        maintenance_object: str = Body("叶家河光储正向隔离装置", description="检修对象"),
+        affected_object: str = Body("叶家河光储正向隔离装置", description="影响对象"),
+        work_content: str = Body("需要重新配置叶家河光储正向隔离装置光功率预测相关策略", description="工作内容")
+) -> BaseResponse:
     device_types = get_device_types(maintenance_object, affected_object, work_content)
     return BaseResponse(code=200, msg="设备类型判断成功", data=device_types)
-
-
 
 
 if __name__ == "__main__":

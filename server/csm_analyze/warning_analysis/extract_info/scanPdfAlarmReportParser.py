@@ -7,7 +7,7 @@ import numpy as np
 from rapidocr import RapidOCR
 from wired_table_rec.main import WiredTableInput
 from wired_table_rec import WiredTableRecognition
-from server.warning_analysis.extract_info.helper import _init_structured_fields, html_to_table, clean_text
+from server.csm_analyze.warning_analysis.extract_info.helper import _init_structured_fields, html_to_table, clean_text
 from server.utils import build_logger
 
 logger = build_logger()

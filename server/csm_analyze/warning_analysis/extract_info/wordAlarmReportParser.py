@@ -3,7 +3,7 @@ import json
 from typing import Dict, Optional
 import re
 from docx import Document
-from server.warning_analysis.extract_info.helper import _init_structured_fields, clean_text
+from server.csm_analyze.warning_analysis.extract_info.helper import _init_structured_fields, clean_text
 
 
 class WORDAlarmReportParser:

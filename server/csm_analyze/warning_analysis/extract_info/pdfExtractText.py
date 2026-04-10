@@ -1,9 +1,6 @@
 import fitz
-import re
-import json
-from typing import Dict, Optional
 
-from server.warning_analysis.extract_info.helper import _init_structured_fields, bbox_in_area, clean_text
+from server.csm_analyze.warning_analysis.extract_info.helper import bbox_in_area, clean_text
 
 
 class PDFExtractText:
