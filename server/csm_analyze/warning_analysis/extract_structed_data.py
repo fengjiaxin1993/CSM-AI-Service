@@ -5,11 +5,15 @@ from typing import Dict
 from langchain_core.prompts import ChatPromptTemplate
 
 from server.chat.utils import History
+from server.csm_analyze.warning_analysis.extract_info.scanPdfExtractText import SCANPDFExtractText
 from server.utils import get_ChatOpenAI, get_default_llm, get_prompt_template
 from server.csm_analyze.warning_analysis.extract_info.helper import fix_llm_json_output
 from server.csm_analyze.warning_analysis.extract_info.pdfExtractText import PDFExtractText
 from server.csm_analyze.warning_analysis.extract_info.wordExtractText import WORDExtractText
 from settings import Settings
+from server.utils import build_logger
+
+logger = build_logger()
 
 
 def extract_structured_data(full_text: str,
@@ -41,6 +45,7 @@ def extract_structured_data(full_text: str,
     response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
     content = response.content  # 核心：提取完整回答文本
+    logger.info(f"抽取告警处置报告的大模型content:\n {content}")
 
     result = fix_llm_json_output(content)
     return result
@@ -57,13 +62,15 @@ def extract_text_from_file(file_path: str, ext: str) -> tuple[str, str]:
         full_text = parser.full_text
         table_data_text = str(parser.tables_data)
         if len(full_text) <= 50:  # 50个字都没有，使用ocr识别
+            parser = SCANPDFExtractText(file_path)
             full_text = parser.full_text
-            table_data_text = str(parser.tables_data)
+            table_data_text = str(parser.table_data)
         return full_text, table_data_text
 
 
 def extract_dict_from_file_by_llm(file_path: str, ext: str) -> Dict:
     full_text, table_data_text = extract_text_from_file(file_path, ext)
+    # logger.info(f"full_text:\n {full_text[:100]}, \ntable_data_text: {table_data_text}")
     return extract_structured_data(full_text, table_data_text)
 
 

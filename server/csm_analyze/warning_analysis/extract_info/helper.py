@@ -121,29 +121,90 @@ def clean_text(text):
 
 # 修复大模型输出库
 def fix_llm_json_output(bad_json_str: str) -> dict:
+    """
+    修复大模型输出的JSON字符串，处理各种格式问题
+    """
+    if not bad_json_str or not isinstance(bad_json_str, str):
+        return {}
+
+    # 第一步：清理特殊字符
+    cleaned_str = bad_json_str.strip()
+    # 移除零宽字符
+    cleaned_str = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', cleaned_str)
+    # 移除控制字符（保留换行符和制表符）
+    cleaned_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', cleaned_str)
+    # 统一换行符
+    cleaned_str = cleaned_str.replace('\r\n', '\n').replace('\r', '\n')
+    # 移除开头和结尾的 markdown 代码块标记
+    cleaned_str = re.sub(r'^```json\s*', '', cleaned_str)
+    cleaned_str = re.sub(r'^```\s*', '', cleaned_str)
+    cleaned_str = re.sub(r'```\s*$', '', cleaned_str)
+
+    # 第二步：尝试直接解析
     try:
-        # 第一步：尝试直接解析（如果本身没问题，直接返回）
-        return json.loads(bad_json_str)
+        return json.loads(cleaned_str)
     except json.JSONDecodeError:
-        import re
-        json_match = re.search(r'\{.*\}', bad_json_str, re.DOTALL)
-        if json_match:
+        pass
+
+    # 第三步：使用正则提取最外层的大括号内容
+    try:
+        # 匹配最外层的大括号（考虑嵌套）
+        match = re.search(r'\{[\s\S]*\}', cleaned_str)
+        if match:
+            extracted = match.group()
             try:
-                result = json.loads(json_match.group())
+                return json.loads(extracted)
             except json.JSONDecodeError:
-                result = {}
-        else:
-            result = {}
-    if not result:
-        try:
-            # 核心修复逻辑：repair_json会自动处理引号、逗号、括号等常见错误
-            repaired_json_str = repair_json(
-                bad_json_str,
-                # 可选配置：根据需求调整
-                ensure_ascii=False,  # 保留中文等非ASCII字符
-                return_objects=True  # 确保修复后是JSON对象（而非数组/字符串）
-            )
-            result = json.loads(repaired_json_str)
-        except Exception as e:
-            pass
-    return result
+                pass
+    except Exception:
+        pass
+
+    # 第四步：使用 repair_json 库修复
+    try:
+        repaired = repair_json(
+            cleaned_str,
+            ensure_ascii=False,
+            return_objects=True
+        )
+        if isinstance(repaired, dict):
+            return repaired
+        elif isinstance(repaired, str):
+            return json.loads(repaired)
+    except Exception:
+        pass
+
+    # 第五步：手动处理常见问题
+    try:
+        manual_fix = cleaned_str
+        # 移除尾部的逗号（在 } 或 ] 前的逗号）
+        manual_fix = re.sub(r',(\s*[}\]])', r'\1', manual_fix)
+        # 处理未转义的换行符（在字符串值中）
+        # 这里需要小心处理，使用简单的启发式方法
+        return json.loads(manual_fix)
+    except json.JSONDecodeError:
+        pass
+
+    # 所有方法都失败，返回空字典
+    return {}
+
+
+if __name__ == "__main__":
+    bad_json_str = """
+    {
+  "报告标题": "关于110kVXX变3月13日告警情况说明",
+  "告警信息": "2026年03月13日XX省调电力监控系统网络安全管理平台，收到XX地调110kVXX变监测装置发出的重要告警，具体告警如下：\n\n加固后，445端口未监听。",
+  "告警是否违规": "是",
+  "设备名称": "后台主机",
+  "设备类型": "主机",
+  "告警时间": "2026年3月13日10:29:10",
+  "告警内容": "后台主机（XXX.XX.X.1）服务器开放了 SMB(445)服务端口。",
+  "处置过程": "加固前，445端口处于开放状态：加固后，445端口未监听。",
+  "原因分析": "生产控制区与管理信息区、安全接入区之间边界，禁止任何穿越的事件发生后，针对站内监测对象做了以下安全措施：\n\n1. 对所有系统进行全面扫，对已知漏洞进行了补丁更新，确保系统安全性；\n2. 配置防火墙，限制445等中高端口的访问。",
+  "责任人员和责任单位处理": "对直接责任人张三给予通报批评、诫勉谈话、经济处罚，离岗参加网络安全专项培训，考核合格后方可返岗。\n对当班班组长/专责李给予通报批评、绩效扣分处理。",
+  "人员教育培训": "无",
+  "整改情况": "所有主机整改完成照片：\n\n1. 系统告警记录：\n2. 事件现场取证照片与整改完成照片：\n\n2026年3月14日，110kVXX站内运维人员联系XXXX后台 电脑程序厂家，在厂家运维工人员指导下检查了445服务端口，并进行了永久关闭。",
+  "防范措施": "对所有系统进行全面扫描，对已知漏洞进行了补丁更新，确保系统安全性；\n配置防火墙，限制445等中高端口的访问；\n对五防电脑开放端口进行了查，五防电脑开放端口均为关闭状态。"
+}
+"""
+    result = fix_llm_json_output(bad_json_str)
+    print(result)

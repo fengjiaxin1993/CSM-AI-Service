@@ -145,27 +145,23 @@ def init_warning_fields() -> dict:
 # 一次性返回研判结果
 def warning_analyze(warning_number: str = Body("test", description="告警编号"),
                     file: UploadFile = File(..., description="上传文件")) -> BaseResponse:
-    # 尝试从缓存获取
-    cached_result = get_warning_data_from_cache(warning_number)
-    if cached_result:
-        logger.info(f"命中缓存，告警编号: {warning_number}")
-        result = cached_result
-    else:
-        # 缓存未命中，执行提取
-        new_file_path = save_to_temp_file(file)
-        ext = os.path.splitext(file.filename)[-1].lower()
-        try:
-            result = extract_dict_from_file_by_llm(new_file_path, ext)
-            result = output_standard_dict(_init_structured_fields(), result)
-            # 存入缓存
-            set_warning_data_to_cache(warning_number, result)
-        except Exception as e:
-            data = init_warning_fields()
-            data["audit_result"] = "需人工复核"
-            data["audit_details"] = f"解析{file.filename}失败，请人工查看"
-            return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}", data=data)
-        finally:
-            os.remove(new_file_path)
+    # 每次都更新缓存
+    new_file_path = save_to_temp_file(file)
+    ext = os.path.splitext(file.filename)[-1].lower()
+    try:
+        result = extract_dict_from_file_by_llm(new_file_path, ext)
+        # logger.info(f"大模型提取告警处置报告结果:\n {result}")
+        result = output_standard_dict(_init_structured_fields(), result)
+        # logger.info(f"标准化告警处置报告结果:\n {result}")
+        # 存入缓存
+        set_warning_data_to_cache(warning_number, result)
+    except Exception as e:
+        data = init_warning_fields()
+        data["audit_result"] = "需人工复核"
+        data["audit_details"] = f"解析{file.filename}失败，请人工查看"
+        return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}", data=data)
+    finally:
+        os.remove(new_file_path)
     try:
         rag_retrieve_info = construct_rag_prompt(alarm_desc=result["告警信息"], top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K,
                                                  score_threshold=Settings.kb_settings.SCORE_THRESHOLD)
@@ -185,9 +181,10 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
         response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
         content = response.content  # 核心：提取完整回答文本
+        # logger.info(f"智能研判结果原始内容: \n{content}")
         res_dic = fix_llm_json_output(content)
+        # logger.info(f"修复大模型输出结果后: \n{res_dic}")
         res_dic = output_standard_dict(init_warning_fields(), res_dic)
-        # print(res_dic)
         return BaseResponse(data=res_dic)
     except Exception as e:
         data = init_warning_fields()
