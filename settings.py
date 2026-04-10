@@ -302,8 +302,8 @@ class PromptSettings(BaseFileSettings):
             "【输出要求】严格按以下JSON格式返回，key的字段一定要匹配，语言贴合电力运维场景：\n"
             "{"
             "'audit_result': '通过/驳回/需人工复核',\n"
-            "'audit_details': '说明审核的细节',\n"
-            "'summary': '报告核心总结（100字内，含告警类型、处置结果、合规情况）',\n"
+            "'audit_details': '输出审核的情况，给出概述，大约100字',\n"
+            "'summary': '本次告警报告内容总结',\n"
             "'reject_reason': '驳回需说明具体修改要求，否则为空',\n"
             "'power_suggestion': '电力行业专属优化建议'\n"
             "} "),
