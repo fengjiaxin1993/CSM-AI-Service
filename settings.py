@@ -99,8 +99,6 @@ class BasicSettings(BaseFileSettings):
     API_SERVER: dict = {"host": DEFAULT_BIND_HOST, "port": 7861}
     """API 服务器地址"""
 
-    WEBUI_SERVER: dict = {"host": DEFAULT_BIND_HOST, "port": 8501}
-    """WEBUI 服务器地址"""
 
     def make_dirs(self):
         '''创建所有数据目录'''

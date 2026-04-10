@@ -45,7 +45,7 @@ def extract_structured_data(full_text: str,
     response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
     content = response.content  # 核心：提取完整回答文本
-    logger.info(f"抽取告警处置报告的大模型content:\n {content}")
+    # logger.info(f"抽取告警处置报告的大模型content:\n {content}")
 
     result = fix_llm_json_output(content)
     return result

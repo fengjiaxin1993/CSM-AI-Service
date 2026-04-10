@@ -654,14 +654,6 @@ def api_address() -> str:
     return f"http://{host}:{port}"
 
 
-def webui_address() -> str:
-    from settings import Settings
-
-    host = Settings.basic_settings.WEBUI_SERVER["host"]
-    port = Settings.basic_settings.WEBUI_SERVER["port"]
-    return f"http://{host}:{port}"
-
-
 def get_prompt_template(type: str, name: str) -> Optional[str]:
     """
     从prompt_config中加载模板内容
