@@ -1,8 +1,11 @@
+import json
 from typing import Dict
 import re
 # 表格由于结构化识别，总是出现问题，因此采用ocr的方法，解决表格识别问题
 import warnings
 import logging
+
+from json_repair import repair_json
 
 # 1. 屏蔽所有警告（含你那条 FutureWarning）
 warnings.filterwarnings("ignore")
@@ -77,15 +80,28 @@ def _init_structured_fields() -> Dict:
     return {
         "报告标题": "",  # 报告标题（如“XX地调关于X月X日XX变的告警情况说明”）
         "告警信息": "",
+        "告警是否违规": "",  # 判断告警是否违规
         "设备名称": "",  # 设备名称
         "设备类型": "",  # 设备类型
         "告警时间": "",  # 告警时间
         "告警内容": "",  # 告警内容
         "处置过程": "",  # 处置过程
         "原因分析": "",  # 原因分析
+        "责任人员和责任单位处理": "",  # 责任人员处理
+        "人员教育培训": "",  # 人员教育培训
         "整改情况": "",  # 整改情况
         "防范措施": ""  # 防范措施
     }
+
+
+def output_standard_dict(dict_standard: dict, output_dict: dict) -> dict:
+    result_dic = {}
+    for k in dict_standard.keys():
+        if k in output_dict:
+            result_dic[k] = output_dict[k]
+        else:
+            result_dic[k] = ""
+    return result_dic
 
 
 def bbox_in_area(bbox, bbox_list):  # 判断bbox是否在表格的bbox中
@@ -99,5 +115,35 @@ def bbox_in_area(bbox, bbox_list):  # 判断bbox是否在表格的bbox中
 
 def clean_text(text):
     text = re.sub(r" ", "", text)  # 合并多余空格/换行
-    text = re.sub(r"\n", "", text)  # 去除转义字符
+    text = re.sub(r"\n+", "\n", text)  # 去除转义字符
     return text
+
+
+# 修复大模型输出库
+def fix_llm_json_output(bad_json_str: str) -> dict:
+    try:
+        # 第一步：尝试直接解析（如果本身没问题，直接返回）
+        return json.loads(bad_json_str)
+    except json.JSONDecodeError:
+        import re
+        json_match = re.search(r'\{.*\}', bad_json_str, re.DOTALL)
+        if json_match:
+            try:
+                result = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                result = {}
+        else:
+            result = {}
+    if not result:
+        try:
+            # 核心修复逻辑：repair_json会自动处理引号、逗号、括号等常见错误
+            repaired_json_str = repair_json(
+                bad_json_str,
+                # 可选配置：根据需求调整
+                ensure_ascii=False,  # 保留中文等非ASCII字符
+                return_objects=True  # 确保修复后是JSON对象（而非数组/字符串）
+            )
+            result = json.loads(repaired_json_str)
+        except Exception as e:
+            pass
+    return result

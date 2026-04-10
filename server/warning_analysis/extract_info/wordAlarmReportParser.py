@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 from typing import Dict, Optional
 import re
@@ -81,8 +82,11 @@ class WORDAlarmReportParser:
 # ---------------------- 测试代码 ----------------------
 if __name__ == "__main__":
     # 测试PDF解析（普通PDF）
-    PDF_PATH = "../word-告警分析报告模板 -demo.docx"
-    parser = WORDAlarmReportParser(PDF_PATH)
+    PDF_PATH1 = "../test_file/关于110kVXX变告警说明.docx"
+    PDF_PATH2 = "../test_file/附件1：关于A二级水电站2月3日的网络安全事件调查报告5 - v2【违规外联】.docx"
+    PDF_PATH3 = "../test_file/附件1：说明模板-关于XX变03月18日的告警情况说明-V2-WLAQ2026031801.docx"
+    PDF_PATH4 = "../test_file/附件1：说明模板-关于XX风光电厂）05月22日的告警情况说明5.31修改版本.docx"
+    parser = WORDAlarmReportParser(PDF_PATH1)
     result = parser.parse()
     print("=== Word文档解析结果 ===")
     print(json.dumps(result, ensure_ascii=False, indent=2))

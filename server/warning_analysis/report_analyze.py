@@ -1,18 +1,17 @@
 import hashlib
 import json
 import os
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from json_repair import repair_json
 from fastapi import Body, UploadFile, File
 from langchain_core.prompts import ChatPromptTemplate
 from server.chat.utils import History
 from server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, BaseResponse, get_default_embedding
 from langchain.docstore.document import Document
-
-from server.warning_analysis.extract_info.pdfAlarmReportParser import PDFAlarmReportParser
-# from server.warning_analysis.extract_info.scanPdfAlarmReportParser import ScannedPdfReportParser
-from server.warning_analysis.extract_info.wordAlarmReportParser import WORDAlarmReportParser
 from server.knowledge_base.kb_service.base import KBServiceFactory
+from server.warning_analysis.extract_info.helper import output_standard_dict, _init_structured_fields, \
+    fix_llm_json_output
+from server.warning_analysis.extract_structed_data import extract_dict_from_file_by_llm
 from settings import Settings
 from utils import build_logger
 from server.knowledge_base.utils import (
@@ -22,6 +21,28 @@ from server.knowledge_base.utils import (
 
 # 知识库插入、搜索
 logger = build_logger()
+
+# 全局缓存：告警编号 -> 提取的字典数据
+_warning_data_cache: Dict[str, Dict] = {}
+
+
+def get_warning_data_from_cache(warning_number: str) -> Optional[Dict]:
+    """从缓存中获取告警数据"""
+    return _warning_data_cache.get(warning_number)
+
+
+def set_warning_data_to_cache(warning_number: str, data: Dict):
+    """将告警数据存入缓存"""
+    _warning_data_cache[warning_number] = data
+
+
+def clear_warning_cache(warning_number: str = None):
+    """清除缓存，如果不指定告警编号则清除全部"""
+    global _warning_data_cache
+    if warning_number:
+        _warning_data_cache.pop(warning_number, None)
+    else:
+        _warning_data_cache = {}
 
 
 def _get_or_create_warning_kb():
@@ -76,9 +97,14 @@ def construct_rag_prompt(alarm_desc: str, top_k: int, score_threshold: float):
         final_retrieve += f"""
     第{idx}条（相似度：{sim}）：
     
-    告警信息描述：{ddoc.page_content} 设备名称：{ddoc.metadata.get("设备名称", "")} 设备类型：{ddoc.metadata.get("设备类型", "")}
+    告警信息描述：{ddoc.page_content} 
+    告警是否违规：{ddoc.metadata.get("告警是否违规", "")} 
+    设备名称：{ddoc.metadata.get("设备名称", "")} 
+    设备类型：{ddoc.metadata.get("设备类型", "")}
     处置过程：{ddoc.metadata.get("处置过程", "")}
     原因分析：{ddoc.metadata.get("原因分析", "")}
+    责任人员和责任单位处理：{ddoc.metadata.get("责任人员和责任单位处理", "")}
+    人员教育培训：{ddoc.metadata.get("人员教育培训", "")}
     整改情况：{ddoc.metadata.get("整改情况", "")}
     防范措施：{ddoc.metadata.get("防范措施", "")}
     ----------------------
@@ -86,18 +112,9 @@ def construct_rag_prompt(alarm_desc: str, top_k: int, score_threshold: float):
     return final_retrieve
 
 
-def compute_str_md5(name: str) -> str:
-    md5 = hashlib.md5()
-    md5.update(name.encode('utf-8'))
-    return md5.hexdigest()
-
-
 # 保存，返回临时路径
 def save_to_temp_file(file: UploadFile):
     file_content = file.file.read()  # 读取上传文件的内容
-    # prefix, suffix = os.path.splitext(file.filename)
-    # new_file_prefix = compute_str_md5(prefix)
-    # new_file_name = new_file_prefix + "." + suffix
     new_file_path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, file.filename)
     if os.path.exists(new_file_path):
         os.remove(new_file_path)
@@ -115,28 +132,6 @@ def save_to_target_file(file: UploadFile, target_file_path):
     return str(target_file_path)
 
 
-# 修复大模型输出库
-def fix_llm_json_output(bad_json_str: str) -> dict:
-    try:
-        # 第一步：尝试直接解析（如果本身没问题，直接返回）
-        return json.loads(bad_json_str)
-    except json.JSONDecodeError:
-        pass
-
-    try:
-        # 核心修复逻辑：repair_json会自动处理引号、逗号、括号等常见错误
-        repaired_json_str = repair_json(
-            bad_json_str,
-            # 可选配置：根据需求调整
-            ensure_ascii=False,  # 保留中文等非ASCII字符
-            return_objects=True  # 确保修复后是JSON对象（而非数组/字符串）
-        )
-        return json.loads(repaired_json_str)
-    except Exception as e:
-        logger.error(f"使用json_repair解析{bad_json_str}结果失败: {str(e)}")
-        return {}
-
-
 #
 def init_warning_fields() -> dict:
     """初始化告警研判结果"""
@@ -149,81 +144,41 @@ def init_warning_fields() -> dict:
     }
 
 
-# 根据标准答案，从llm输出的结果进行校验
-def normalize_warning_output(content: str) -> dict:
-    fix_dic = fix_llm_json_output(content)
-    res_dic = init_warning_fields()
-    for k in res_dic.keys():
-        if k in fix_dic.keys():
-            res_dic[k] = fix_dic[k]
-    return res_dic
-
-
-# 校验告警处置报告是否缺失字段
-def check_report(dic) -> tuple[bool, list]:
-    keys = ["报告标题", "告警信息", "设备名称", "设备类型", "告警时间",
-            "告警内容", "处置过程", "原因分析", "整改情况", "防范措施"]
-    empty_list = []
-    for key in keys:
-        if not dic[key]:  # 为空
-            empty_list.append(key)
-    return len(empty_list) == 0, empty_list
-
-
-def extract_dic_from_file(file_path: str, ext: str):
-    result = {}
-    if ext == ".docx":
-        parser = WORDAlarmReportParser(file_path)
-        result = parser.parse()
-    elif ext == ".pdf":
-        parser = PDFAlarmReportParser(file_path)
-        result = parser.parse()
-        # flag, empty_list = check_report(result)
-        # if not flag:  # 尝试
-        #     parser = ScannedPdfReportParser(file_path)
-        #     result = parser.parse()
-    return result
-
-
 # 一次性返回研判结果
 def warning_analyze(warning_number: str = Body("test", description="告警编号"),
-                    file: UploadFile = File(..., description="上传文件"),
-                    model: str = Body(get_default_llm(), description="LLM 模型名称。"),
-                    max_tokens: Optional[int] = Body(
-                        Settings.model_settings.MAX_TOKENS,
-                        description="限制LLM生成Token数量，默认None代表模型最大值"
-                    ),
-                    top_k: Optional[int] = Body(
-                        Settings.kb_settings.VECTOR_SEARCH_TOP_K,
-                        description="最多搜索top_k条相似告警"
-                    ),
-                    score_threshold: Optional[float] = Body(
-                        Settings.kb_settings.SCORE_THRESHOLD,
-                        description="相似度阈值"
-                    )) -> BaseResponse:
-    new_file_path = save_to_temp_file(file)
-    result = None
-    ext = os.path.splitext(file.filename)[-1].lower()
+                    file: UploadFile = File(..., description="上传文件")) -> BaseResponse:
+    # 尝试从缓存获取
+    cached_result = get_warning_data_from_cache(warning_number)
+    if cached_result:
+        logger.info(f"命中缓存，告警编号: {warning_number}")
+        result = cached_result
+    else:
+        # 缓存未命中，执行提取
+        new_file_path = save_to_temp_file(file)
+        ext = os.path.splitext(file.filename)[-1].lower()
+        try:
+            result = extract_dict_from_file_by_llm(new_file_path, ext)
+            result = output_standard_dict(_init_structured_fields(), result)
+            # 存入缓存
+            set_warning_data_to_cache(warning_number, result)
+        except Exception as e:
+            data = init_warning_fields()
+            data["audit_result"] = "需人工复核"
+            data["audit_details"] = f"解析{file.filename}失败，请人工查看"
+            return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}", data=data)
+        finally:
+            os.remove(new_file_path)
     try:
-        result = extract_dic_from_file(new_file_path, ext)
-    except Exception as e:
-        return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}", data=init_warning_fields())
-
-    flag, empty_list = check_report(result)
-    if not flag:
-        empty_str = ",".join(empty_list)
-        return BaseResponse(code=204, msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}", data=init_warning_fields())
-    try:
-        rag_retrieve_info = construct_rag_prompt(alarm_desc=result["告警信息"], top_k=top_k,
-                                                 score_threshold=score_threshold)
+        rag_retrieve_info = construct_rag_prompt(alarm_desc=result["告警信息"], top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K,
+                                                 score_threshold=Settings.kb_settings.SCORE_THRESHOLD)
         report_info = json.dumps(result, ensure_ascii=False, indent=2)
         llm = get_ChatOpenAI(
-            model_name=model,
+            model_name=get_default_llm(),
             temperature=0.1,
-            max_tokens=max_tokens,
+            max_tokens=Settings.model_settings.MAX_TOKENS,
         )
 
-        prompt_template = get_prompt_template("warning", "default")
+        prompt_template = get_prompt_template("warning", "analyze")
         # 渲染提示词
         input_msg = History(role="user", content=prompt_template).to_msg_template(False)
         chat_prompt = ChatPromptTemplate.from_messages([input_msg])
@@ -232,12 +187,15 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
         response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
         content = response.content  # 核心：提取完整回答文本
-        # print(content)
-        res_dic = normalize_warning_output(content)
+        res_dic = fix_llm_json_output(content)
+        res_dic = output_standard_dict(init_warning_fields(), res_dic)
         # print(res_dic)
         return BaseResponse(data=res_dic)
     except Exception as e:
-        return BaseResponse(code=202, msg=f"解析失败，报错信息{e}", data=init_warning_fields())
+        data = init_warning_fields()
+        data["audit_result"] = "需人工复核"
+        data["audit_details"] = f"大模型分析{file.filename}失败，请人工查看"
+        return BaseResponse(code=203, msg=f"大模型分析{file.filename}失败，请人工查看，报错信息{e}", data=data)
 
 
 # 保存处置报告
@@ -249,18 +207,9 @@ def save_warning_report(
         knowledge_base_name=Settings.kb_settings.WARNING_KNOWLEDGE, doc_name=file.filename
     )
     save_to_target_file(file, target_file_path)
-    result = {}
-    ext = os.path.splitext(file.filename)[-1].lower()
-    try:
-        result = extract_dic_from_file(target_file_path, ext)
-    except Exception as e:
-        return BaseResponse(code=200, msg=f"解析{file.filename}失败，报错信息{e}，暂时不存在向量库中")
-
-    flag, empty_list = check_report(result)
-    if not flag:
-        empty_str = ",".join(empty_list)
-        return BaseResponse(code=200,
-                            msg=f"处置报告{file.filename}缺失关键信息，缺失字段有{empty_str}，暂时不存在向量库中")
+    cached_result = get_warning_data_from_cache(warning_number)
+    if not cached_result:
+        return BaseResponse(code=200, msg=f"解析{file.filename}失败，暂时不存在向量库中")
 
     # 获取告警知识库服务
     kb = _get_or_create_warning_kb()
@@ -268,11 +217,13 @@ def save_warning_report(
         return BaseResponse(code=500, msg="告警知识库创建失败")
 
     # 加入告警编号信息
-    result["warning_number"] = warning_number
+    cached_result["warning_number"] = warning_number
+    cached_result['file_name'] = file.filename
+    cached_result['file_path'] = target_file_path
     # 构建 Document 对象
     doc = Document(
-        page_content=result["告警信息"],
-        metadata=result
+        page_content=cached_result["告警信息"],
+        metadata=cached_result
     )
 
     # 创建虚拟文件对象用于 add_doc
@@ -300,6 +251,8 @@ def delete_warning_report(
     """根据告警编号从知识库中删除对应的告警处置报告"""
     if not warning_number or not warning_number.strip():
         return BaseResponse(code=400, msg="告警编号不能为空")
+
+    clear_warning_cache(warning_number)
 
     # 获取告警知识库服务
     kb = _get_or_create_warning_kb()
