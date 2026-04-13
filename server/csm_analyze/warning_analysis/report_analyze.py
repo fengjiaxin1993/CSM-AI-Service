@@ -147,12 +147,13 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
                     file: UploadFile = File(..., description="上传文件")) -> BaseResponse:
     # 每次都更新缓存
     new_file_path = save_to_temp_file(file)
+    file_name = file.filename
     ext = os.path.splitext(file.filename)[-1].lower()
     try:
-        result = extract_dict_from_file_by_llm(new_file_path, ext)
-        # logger.info(f"大模型提取告警处置报告结果:\n {result}")
+        result = extract_dict_from_file_by_llm(new_file_path, file_name, ext)
+        logger.debug(f"\n【step 3】修复后大模型提取处置报告【{file_name}】的json:\n {result}")
         result = output_standard_dict(_init_structured_fields(), result)
-        # logger.info(f"标准化告警处置报告结果:\n {result}")
+        logger.debug(f"\n【step 4】标准化告警处置报告【{file_name}】的结果:\n {result}")
         # 存入缓存
         set_warning_data_to_cache(warning_number, result)
     except Exception as e:
@@ -181,9 +182,9 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
         response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
         content = response.content  # 核心：提取完整回答文本
-        # logger.info(f"智能研判结果原始内容: \n{content}")
+        logger.debug(f"\n【step 5】大模型对{file_name}处置报告的智能研判结果原始内容: \n{content}")
         res_dic = fix_llm_json_output(content)
-        # logger.info(f"修复大模型输出结果后: \n{res_dic}")
+        logger.debug(f"\n【step 6】修复对{file_name}的智能研判结果json: \n{res_dic}")
         res_dic = output_standard_dict(init_warning_fields(), res_dic)
         return BaseResponse(data=res_dic)
     except Exception as e:

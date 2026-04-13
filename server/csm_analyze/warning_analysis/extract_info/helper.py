@@ -4,7 +4,7 @@ import re
 # 表格由于结构化识别，总是出现问题，因此采用ocr的方法，解决表格识别问题
 import warnings
 import logging
-
+logging.getLogger("DownloadModel").setLevel(logging.WARNING)
 from json_repair import repair_json
 
 # 1. 屏蔽所有警告（含你那条 FutureWarning）

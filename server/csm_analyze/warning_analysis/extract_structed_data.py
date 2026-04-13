@@ -16,7 +16,7 @@ from server.utils import build_logger
 logger = build_logger()
 
 
-def extract_structured_data(full_text: str,
+def extract_structured_data(file_name: str, full_text: str,
                             table_data: str = "") -> Dict:
     """
     调用大模型从Word文档中提取结构化数据
@@ -45,7 +45,7 @@ def extract_structured_data(full_text: str,
     response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
     content = response.content  # 核心：提取完整回答文本
-    # logger.info(f"抽取告警处置报告的大模型content:\n {content}")
+    logger.debug(f"\n【step 2】大模型提取{file_name}的原始content:\n {content}")
 
     result = fix_llm_json_output(content)
     return result
@@ -68,10 +68,10 @@ def extract_text_from_file(file_path: str, ext: str) -> tuple[str, str]:
         return full_text, table_data_text
 
 
-def extract_dict_from_file_by_llm(file_path: str, ext: str) -> Dict:
+def extract_dict_from_file_by_llm(file_path: str, file_name: str, ext: str) -> Dict:
     full_text, table_data_text = extract_text_from_file(file_path, ext)
-    # logger.info(f"full_text:\n {full_text[:100]}, \ntable_data_text: {table_data_text}")
-    return extract_structured_data(full_text, table_data_text)
+    logger.debug(f"\n【step 1】{file_name} 的抽取信息:\nfull_text:\n {full_text[:100]}, \ntable_data_text: {table_data_text}")
+    return extract_structured_data(file_name, full_text, table_data_text)
 
 
 # ---------------------- 测试代码 ----------------------
