@@ -188,7 +188,10 @@ class PlatformConfig(MyBaseModel):
     platform_type: t.Literal["ollama", "openai"] = "ollama"
     """平台类型"""
 
-    api_base_url: str = "http://127.0.0.1:11434/v1"
+    llm_base_url: str = "http://127.0.0.1:11434/v1"
+    """openai api url"""
+
+    embedding_base_url: str = "http://127.0.0.1:11434/v1"
     """openai api url"""
 
     api_key: str = "EMPTY"
@@ -236,7 +239,8 @@ class ApiModelSettings(BaseFileSettings):
         PlatformConfig(**{
             "platform_name": "ollama",
             "platform_type": "ollama",
-            "api_base_url": "http://192.168.88.1:11434/v1",
+            "llm_base_url": "http://192.168.88.1:11434/v1",
+            "embedding_base_url": "http://192.168.88.1:11434/v1",
             "api_key": "EMPTY",
             "llm_models": [
                 "qwen2.5:0.5b",
@@ -248,7 +252,8 @@ class ApiModelSettings(BaseFileSettings):
         PlatformConfig(**{
             "platform_name": "openai",
             "platform_type": "openai",
-            "api_base_url": "https://api.openai.com/v1",
+            "llm_base_url": "https://api.openai.com/v1",
+            "embedding_base_url": "https://api.openai.com/v1",
             "api_key": "sk-proj-",
             "llm_models": [
                 "gpt-4o",

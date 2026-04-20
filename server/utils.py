@@ -114,7 +114,8 @@ def get_config_models(
                         "platform_type": m.get("platform_type"),
                         "model_type": m_type.split("_")[0],
                         "model_name": m_name,
-                        "api_base_url": m.get("api_base_url"),
+                        "llm_base_url": m.get("llm_base_url"),
+                        "embedding_base_url": m.get("embedding_base_url"),
                         "api_key": m.get("api_key"),
                         "api_proxy": m.get("api_proxy"),
                     }
@@ -191,57 +192,15 @@ def get_ChatOpenAI(
             )
         else:
             params.update(
-                openai_api_base=model_info.get("api_base_url"),
+                openai_api_base=model_info.get("llm_base_url"),
                 openai_api_key=model_info.get("api_key"),
-                openai_proxy=model_info.get("api_proxy"),
+                openai_proxy=model_info.get("api_proxy")
             )
         model = ChatOpenAI(**params)
     except Exception as e:
         logger.error(
             f"failed to create ChatOpenAI for model: {model_name}.", exc_info=True
         )
-        model = None
-    return model
-
-
-def get_OpenAI(
-        model_name: str,
-        temperature: float,
-        max_tokens: int = Settings.model_settings.MAX_TOKENS,
-        streaming: bool = True,
-        echo: bool = True,
-        callbacks: List[Callable] = [],
-        verbose: bool = True,
-        local_wrap: bool = False,  # use local wrapped api
-        **kwargs: Any,
-) -> OpenAI:
-    # TODO: 从API获取模型信息
-    model_info = get_model_info(model_name)
-    params = dict(
-        streaming=streaming,
-        verbose=verbose,
-        callbacks=callbacks,
-        model_name=model_name,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        echo=echo,
-        **kwargs,
-    )
-    try:
-        if local_wrap:
-            params.update(
-                openai_api_base=f"{api_address()}/v1",
-                openai_api_key="EMPTY",
-            )
-        else:
-            params.update(
-                openai_api_base=model_info.get("api_base_url"),
-                openai_api_key=model_info.get("api_key"),
-                openai_proxy=model_info.get("api_proxy"),
-            )
-        model = OpenAI(**params)
-    except Exception as e:
-        logger.error(f"failed to create OpenAI for model: {model_name}.", exc_info=True)
         model = None
     return model
 
@@ -349,16 +308,19 @@ def get_Embeddings(
             )
         else:
             params.update(
-                openai_api_base=model_info.get("api_base_url"),
+                openai_api_base=model_info.get("embedding_base_url"),
                 openai_api_key=model_info.get("api_key"),
                 openai_proxy=model_info.get("api_proxy"),
             )
         base_embeddings = None
         if model_info.get("platform_type") == "openai":
+            params.update(
+                check_embedding_ctx_length=False,
+                chunk_size=8)
             base_embeddings = OpenAIEmbeddings(**params)
         elif model_info.get("platform_type") == "ollama":
             base_embeddings = OllamaEmbeddings(
-                base_url=model_info.get("api_base_url").replace("/v1", ""),
+                base_url=model_info.get("embedding_base_url").replace("/v1", ""),
                 model=embed_model,
             )
         else:
@@ -381,46 +343,6 @@ def check_embed_model(embed_model: str = get_default_embedding()) -> bool:
             f"failed to access embed model '{embed_model}': {e}", exc_info=True
         )
         return False
-
-
-def get_OpenAIClient(
-        platform_name: str = None,
-        model_name: str = None,
-        is_async: bool = True,
-) -> Union[openai.Client, openai.AsyncClient]:
-    """
-    construct an openai Client for specified platform or model
-    """
-    if platform_name is None:
-        platform_info = get_model_info(
-            model_name=model_name, platform_name=platform_name
-        )
-        if platform_info is None:
-            raise RuntimeError(
-                f"cannot find configured platform for model: {model_name}"
-            )
-        platform_name = platform_info.get("platform_name")
-    platform_info = get_config_platforms().get(platform_name)
-    assert platform_info, f"cannot find configured platform: {platform_name}"
-    params = {
-        "base_url": platform_info.get("api_base_url"),
-        "api_key": platform_info.get("api_key"),
-    }
-    httpx_params = {}
-    if api_proxy := platform_info.get("api_proxy"):
-        httpx_params = {
-            "proxies": api_proxy,
-            "transport": httpx.HTTPTransport(local_address="0.0.0.0"),
-        }
-
-    if is_async:
-        if httpx_params:
-            params["http_client"] = httpx.AsyncClient(**httpx_params)
-        return openai.AsyncClient(**params)
-    else:
-        if httpx_params:
-            params["http_client"] = httpx.Client(**httpx_params)
-        return openai.Client(**params)
 
 
 class MsgType:
