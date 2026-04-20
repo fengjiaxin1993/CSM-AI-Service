@@ -231,6 +231,7 @@ def save_warning_report(
     # 使用 KBService 的 add_doc 方法，传入自定义 docs
     try:
         status = kb.add_doc(kb_file, docs=[doc])
+        clear_warning_cache(warning_number)
         if status:
             return BaseResponse(code=200, msg="保存成功")
         else:
