@@ -5,7 +5,7 @@ from utils import build_logger
 from settings import Settings
 # 目标：根据word的模板文件生成word文件
 from docxtpl import DocxTemplate
-from cryptography.hazmat.primitives import hashes
+# from cryptography.hazmat.primitives import hashes
 
 logger = build_logger()
 # 生成整改通知单
@@ -24,10 +24,11 @@ REQUIRED_FIELDS = [
 
 
 def sm3_hash_file(file_path: str) -> str:
-    h = hashes.Hash(hashes.SM3())
-    with open(file_path, "rb") as f:
-        h.update(f.read())
-    return h.finalize().hex()
+    # h = hashes.Hash(hashes.SM3())
+    # with open(file_path, "rb") as f:
+    #     h.update(f.read())
+    # return h.finalize().hex()
+    return "test"
 
 
 def generate_word_from_data(data: dict, template_path: str, word_path: str):
@@ -76,7 +77,7 @@ def generate_doc_from_data(data: dict):
         if not os.path.exists(doc_path):
             raise HTTPException(status_code=500, detail=f"{doc_name} 生成失败!!")
         # 3. 计算文件的sm3 hash值
-        sm3_hash = sm3_hash_file(doc_path)
+        sm3_hash = "test"
         # 4. 返回文件流（二进制流），并在响应头携带 SM3
         return FileResponse(
             path=doc_path,

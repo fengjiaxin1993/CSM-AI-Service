@@ -5,7 +5,7 @@ from typing import Dict
 from langchain_core.prompts import ChatPromptTemplate
 
 from server.chat.utils import History
-from server.csm_analyze.warning_analysis.extract_info.scanPdfExtractText import SCANPDFExtractText
+# from server.csm_analyze.warning_analysis.extract_info.scanPdfExtractText import SCANPDFExtractText
 from server.utils import get_ChatOpenAI, get_default_llm, get_prompt_template
 from server.csm_analyze.warning_analysis.extract_info.helper import fix_llm_json_output
 from server.csm_analyze.warning_analysis.extract_info.pdfExtractText import PDFExtractText
@@ -61,10 +61,10 @@ def extract_text_from_file(file_path: str, ext: str) -> tuple[str, str]:
         parser = PDFExtractText(file_path)
         full_text = parser.full_text
         table_data_text = str(parser.tables_data)
-        if len(full_text) <= 50:  # 50个字都没有，使用ocr识别
-            parser = SCANPDFExtractText(file_path)
-            full_text = parser.full_text
-            table_data_text = str(parser.table_data)
+        # if len(full_text) <= 50:  # 50个字都没有，使用ocr识别
+        #     parser = SCANPDFExtractText(file_path)
+        #     full_text = parser.full_text
+        #     table_data_text = str(parser.table_data)
         return full_text, table_data_text
 
 
