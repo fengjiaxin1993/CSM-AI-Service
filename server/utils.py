@@ -194,7 +194,8 @@ def get_ChatOpenAI(
             params.update(
                 openai_api_base=model_info.get("llm_base_url"),
                 openai_api_key=model_info.get("api_key"),
-                openai_proxy=model_info.get("api_proxy")
+                openai_proxy=model_info.get("api_proxy"),
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}}
             )
         model = ChatOpenAI(**params)
     except Exception as e:

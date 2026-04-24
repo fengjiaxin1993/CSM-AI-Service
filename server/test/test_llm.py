@@ -7,10 +7,10 @@ llm = ChatOpenAI(
     model="qwen3-32b",
     extra_body= {"enable_thinking": False}
 )
-
+# https://huggingface.co/Qwen/Qwen3.5-27B
 # 普通openai
 llm = ChatOpenAI(
-    api_key="sk-445d4654ee8e4067b447172154f0a273",
+    # api_key="sk-445d4654ee8e4067b447172154f0a273",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     model="qwen3-32b",
     extra_body={
