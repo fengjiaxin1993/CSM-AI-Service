@@ -9,9 +9,9 @@ from typing import Dict, Generator, List, Tuple, Union
 
 import chardet
 import langchain_community.document_loaders
-from langchain.docstore.document import Document
-from langchain.text_splitter import MarkdownHeaderTextSplitter, TextSplitter
 from langchain_community.document_loaders import JSONLoader, TextLoader
+from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownHeaderTextSplitter, TextSplitter
 
 from settings import Settings
 from server.file_rag.text_splitter import (

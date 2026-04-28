@@ -1,6 +1,6 @@
 from typing import Dict, List, Tuple, Union
-from langchain.prompts.chat import ChatMessagePromptTemplate
-from server.pydantic_v2 import BaseModel, Field
+from langchain_core.prompts import ChatMessagePromptTemplate
+from pydantic import BaseModel, Field
 
 
 class History(BaseModel):

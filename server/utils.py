@@ -20,15 +20,12 @@ from typing import (
 )
 
 import httpx
-import numpy as np
-import openai
 from fastapi import FastAPI
 from langchain_core.embeddings import Embeddings
 from langchain_openai.chat_models import ChatOpenAI
-from langchain_openai.llms import OpenAI
+from pydantic import BaseModel, Field
 
 from settings import Settings
-from server.pydantic_v2 import BaseModel, Field
 from utils import build_logger
 
 logger = build_logger()
@@ -87,14 +84,6 @@ def get_config_models(
         ]
     else:
         model_types = [f"{model_type}_models"]
-
-    xf_model_type_maps = {
-        "llm_models": lambda xf_models: [k for k, v in xf_models.items()
-                                         if "LLM" == v["model_type"]
-                                         and "vision" not in v["model_ability"]],
-        "embed_models": lambda xf_models: [k for k, v in xf_models.items()
-                                           if "embedding" == v["model_type"]]
-    }
 
     for m in list(get_config_platforms().values()):
         if platform_name is not None and platform_name != m.get("platform_name"):
@@ -185,18 +174,13 @@ def get_ChatOpenAI(
             params.pop(k)
 
     try:
-        if local_wrap:
-            params.update(
-                openai_api_base=f"{api_address()}/v1",
-                openai_api_key="EMPTY",
-            )
-        else:
-            params.update(
-                openai_api_base=model_info.get("llm_base_url"),
-                openai_api_key=model_info.get("api_key"),
-                openai_proxy=model_info.get("api_proxy"),
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}}
-            )
+        params.update(
+            openai_api_base=model_info.get("llm_base_url"),
+            openai_api_key=model_info.get("api_key"),
+            openai_proxy=model_info.get("api_proxy"),
+            # extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body = {"enable_thinking": False}
+        )
         model = ChatOpenAI(**params)
     except Exception as e:
         logger.error(
@@ -206,114 +190,21 @@ def get_ChatOpenAI(
     return model
 
 
-# ---------------------- 步骤1：封装安全的 L2 归一化函数（避免极限值） ----------------------
-def safe_l2_normalize(vector: List[float], epsilon: float = 1e-8) -> List[float]:
-    """
-    安全的向量 L2 归一化函数，避免除以零、NaN/Inf 等极限值问题
-    :param vector: 输入的原始向量
-    :param epsilon: 极小值，用于防止分母为零
-    :return: 归一化后的向量
-    """
-    try:
-        # 转换为 numpy 数组，方便进行数值计算
-        vec_np = np.array(vector, dtype=np.float64)
-
-        # 计算 L2 范数（欧几里得范数）
-        l2_norm = np.linalg.norm(vec_np, ord=2)
-
-        # 安全判断：若范数接近零（小于 epsilon），直接返回原向量（或零向量），避免除以零
-        if l2_norm < epsilon:
-            logger.warning("Vector L2 norm is close to zero, skip normalization to avoid division by zero.")
-            return vec_np.tolist()  # 转回列表格式，保持接口一致性
-
-        # 执行归一化：向量 / 其 L2 范数，得到单位向量
-        normalized_vec = vec_np / l2_norm
-
-        # 额外处理：防止极端数值（NaN/Inf），替换为合理值
-        normalized_vec = np.nan_to_num(normalized_vec, nan=0.0, posinf=epsilon, neginf=-epsilon)
-
-        return normalized_vec.tolist()
-
-    except Exception as e:
-        logger.error(f"Failed to normalize vector: {str(e)}", exc_info=True)
-        # 异常时返回原始向量，保证程序不中断
-        return vector
-
-
-# ---------------------- 步骤2：创建自定义 Embeddings 包装类，集成归一化功能 ----------------------
-class NormalizedEmbeddings(Embeddings):
-    """
-    自定义 Embeddings 包装类，在原始 Embeddings 基础上添加向量归一化功能
-    保持与 LangChain Embeddings 抽象类的接口兼容
-    """
-
-    def __init__(self, base_embeddings: Embeddings, normalize: bool = True):
-        """
-        初始化包装类
-        :param base_embeddings: 原始的 Embeddings 实例（如 OpenAIEmbeddings、OllamaEmbeddings）
-        :param normalize: 是否开启归一化，默认开启
-        """
-        self.base_embeddings = base_embeddings
-        self.normalize = normalize
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """
-        批量嵌入文档，返回归一化后的向量列表
-        :param texts: 文档文本列表
-        :return: 归一化后的批量向量
-        """
-        # 调用原始 Embeddings 的批量嵌入方法
-        raw_embeddings = self.base_embeddings.embed_documents(texts)
-
-        # 若开启归一化，对每个向量执行安全归一化
-        if self.normalize:
-            return [safe_l2_normalize(vec) for vec in raw_embeddings]
-
-        return raw_embeddings
-
-    def embed_query(self, text: str) -> List[float]:
-        """
-        单个查询嵌入，返回归一化后的向量
-        :param text: 查询文本
-        :return: 归一化后的单个向量
-        """
-        # 调用原始 Embeddings 的单个查询嵌入方法
-        raw_embedding = self.base_embeddings.embed_query(text)
-
-        # 若开启归一化，执行安全归一化
-        if self.normalize:
-            return safe_l2_normalize(raw_embedding)
-
-        return raw_embedding
-
-
 def get_Embeddings(
         embed_model: str = None,
         local_wrap: bool = False,  # use local wrapped api
 ) -> Embeddings:
     from langchain_community.embeddings import OllamaEmbeddings
     from langchain_openai import OpenAIEmbeddings
-
-    from server.localai_embeddings import (
-        LocalAIEmbeddings,
-    )
-
     embed_model = embed_model or get_default_embedding()
     model_info = get_model_info(model_name=embed_model)
     params = dict(model=embed_model)
     try:
-        if local_wrap:
-            params.update(
-                openai_api_base=f"{api_address()}/v1",
-                openai_api_key="EMPTY",
-            )
-        else:
-            params.update(
-                openai_api_base=model_info.get("embedding_base_url"),
-                openai_api_key=model_info.get("api_key"),
-                openai_proxy=model_info.get("api_proxy"),
-            )
-        base_embeddings = None
+        params.update(
+            openai_api_base=model_info.get("embedding_base_url"),
+            openai_api_key=model_info.get("api_key"),
+            openai_proxy=model_info.get("api_proxy"),
+        )
         if model_info.get("platform_type") == "openai":
             params.update(
                 check_embedding_ctx_length=False,
@@ -325,8 +216,7 @@ def get_Embeddings(
                 model=embed_model,
             )
         else:
-            base_embeddings = LocalAIEmbeddings(**params)
-        # return NormalizedEmbeddings(base_embeddings)
+            base_embeddings = OpenAIEmbeddings(**params)
         return base_embeddings
     except Exception as e:
         logger.error(
@@ -528,44 +418,6 @@ def MakeFastAPIOffline(
                 with_google_fonts=False,
                 redoc_favicon_url=favicon,
             )
-
-
-# 从model_config中获取模型信息
-# TODO: 移出模型加载后，这些功能需要删除或改变实现
-
-# def list_embed_models() -> List[str]:
-#     '''
-#     get names of configured embedding models
-#     '''
-#     return list(MODEL_PATH["embed_model"])
-
-
-# def get_model_path(model_name: str, type: str = None) -> Optional[str]:
-#     if type in MODEL_PATH:
-#         paths = MODEL_PATH[type]
-#     else:
-#         paths = {}
-#         for v in MODEL_PATH.values():
-#             paths.update(v)
-
-#     if path_str := paths.get(model_name):  # 以 "chatglm-6b": "THUDM/chatglm-6b-new" 为例，以下都是支持的路径
-#         path = Path(path_str)
-#         if path.is_dir():  # 任意绝对路径
-#             return str(path)
-
-#         root_path = Path(MODEL_ROOT_PATH)
-#         if root_path.is_dir():
-#             path = root_path / model_name
-#             if path.is_dir():  # use key, {MODEL_ROOT_PATH}/chatglm-6b
-#                 return str(path)
-#             path = root_path / path_str
-#             if path.is_dir():  # use value, {MODEL_ROOT_PATH}/THUDM/chatglm-6b-new
-#                 return str(path)
-#             path = root_path / path_str.split("/")[-1]
-#             if path.is_dir():  # use value split by "/", {MODEL_ROOT_PATH}/chatglm-6b-new
-#                 return str(path)
-#         return path_str  # THUDM/chatglm06b
-
 
 def api_address() -> str:
     from settings import Settings

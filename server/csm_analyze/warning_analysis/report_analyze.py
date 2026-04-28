@@ -5,7 +5,7 @@ from fastapi import Body, UploadFile, File
 from langchain_core.prompts import ChatPromptTemplate
 from server.chat.utils import History
 from server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, BaseResponse, get_default_embedding
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from server.knowledge_base.kb_service.base import KBServiceFactory
 from server.csm_analyze.warning_analysis.extract_info.helper import output_standard_dict, _init_structured_fields, \
     fix_llm_json_output

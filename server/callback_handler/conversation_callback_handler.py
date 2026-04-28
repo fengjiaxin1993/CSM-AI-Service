@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain.schema import LLMResult
+from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
 from server.db.repository.conversation_repository import update_conversation
 
 

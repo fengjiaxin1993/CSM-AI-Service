@@ -3,6 +3,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
+
+from server.api_server.agent_chat_routes import agent_chat_router
 from server.api_server.tickets_routes import ticket_router
 from server.api_server.warning_routes import warning_router
 from settings import Settings
@@ -33,6 +35,7 @@ def create_app():
         return RedirectResponse(url="/docs")
 
     app.include_router(chat_router)
+    app.include_router(agent_chat_router)
     app.include_router(kb_router)
     app.include_router(server_router)
     app.include_router(warning_router)

@@ -1,5 +1,6 @@
-from langchain.vectorstores import VectorStore
+
 from langchain_core.retrievers import BaseRetriever
+from langchain_core.vectorstores import VectorStore
 
 from server.file_rag.retrievers.base import BaseRetrieverService
 

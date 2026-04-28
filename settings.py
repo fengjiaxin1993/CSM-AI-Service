@@ -90,6 +90,9 @@ class BasicSettings(BaseFileSettings):
     DEBUG: bool = True
     """doc的 api 是否web页面可以查看"""
 
+    PRINT_AGENT: bool = True
+    """打印agent执行的中间状态"""
+
     DEFAULT_BIND_HOST: str = "0.0.0.0" if sys.platform != "win32" else "127.0.0.1"
     """
     各服务器默认绑定host。如改为"0.0.0.0"需要修改下方所有XX_SERVER的host
@@ -98,7 +101,6 @@ class BasicSettings(BaseFileSettings):
 
     API_SERVER: dict = {"host": DEFAULT_BIND_HOST, "port": 7861}
     """API 服务器地址"""
-
 
     def make_dirs(self):
         '''创建所有数据目录'''
@@ -268,6 +270,142 @@ class ApiModelSettings(BaseFileSettings):
     """模型平台配置"""
 
 
+class AlertToolParam(MyBaseModel):
+    """工具参数定义"""
+    name: str = ""
+    """参数名称"""
+    
+    type: str = "string"
+    """参数类型：string, integer, number, boolean, array, object"""
+    
+    description: str = ""
+    """参数描述，用于LLM理解参数含义"""
+    
+    required: bool = True
+    """是否必填"""
+    
+    default: t.Any = None
+    """默认值"""
+
+
+class AlertToolConfig(MyBaseModel):
+    """告警工具配置"""
+    name: str = ""
+    """工具名称（函数名）"""
+    
+    description: str = ""
+    """工具函数的描述文档，用于LLM理解工具用途"""
+    
+    params: t.List[AlertToolParam] = []
+    """工具输入参数列表"""
+    
+    return_schema: t.Dict[str, t.Any] = {}
+    """返回数据格式定义，用于LLM理解工具返回的数据结构"""
+    
+    return_description: str = ""
+    """返回数据描述，说明返回值的格式和内容"""
+    
+    url: str = ""
+    """HTTP POST 请求的 URL"""
+    
+    method: t.Literal["GET", "POST"] = "POST"
+    """请求方法"""
+    
+    timeout: int = 30
+    """请求超时时间（秒）"""
+    
+    headers: t.Dict[str, str] = {}
+    """请求头"""
+
+
+class AgentToolsSettings(BaseFileSettings):
+    """Agent 工具配置 - 支持通过 HTTP 调用外部服务"""
+    
+    model_config = SettingsConfigDict(yaml_file=CHATCHAT_ROOT / "agent_tools_settings.yaml")
+    
+    ALERT_API_BASE_URL: str = ""
+    """告警 API 基础 URL，如果配置则优先使用 HTTP 调用"""
+    
+    ALERT_TOOLS: t.List[AlertToolConfig] = [
+        AlertToolConfig(**{
+            "name": "get_alert_overview",
+            "description": "获取指定时间范围告警总览：总数、等级、状态分布",
+            "params": [
+                {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
+                {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
+            ],
+            "return_schema": {
+                "时间范围": "string",
+                "告警总数": "integer",
+                "紧急告警数": "integer",
+                "重要告警数": "integer",
+                "待处置数量": "integer",
+                "已归档数量": "integer",
+            },
+            "return_description": "返回JSON格式的告警统计数据，包含时间范围、告警总数、各等级告警数量等",
+            "url": "/api/alert/overview",
+            "method": "POST",
+            "timeout": 30,
+            "headers": {"Content-Type": "application/json"},
+        }),
+        AlertToolConfig(**{
+            "name": "get_alert_trend",
+            "description": "获取指定时间范围告警趋势数据，返回每日告警数量变化",
+            "params": [
+                {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
+                {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
+            ],
+            "return_schema": {
+                "时间范围": "string",
+                "每日趋势": [{"日期": "integer"}],
+            },
+            "return_description": "返回JSON格式的趋势数据，包含时间范围和每日告警数量列表",
+            "url": "/api/alert/trend",
+            "method": "POST",
+            "timeout": 30,
+            "headers": {"Content-Type": "application/json"},
+        }),
+        AlertToolConfig(**{
+            "name": "get_alert_type_dist",
+            "description": "获取指定时间范围告警类型分布统计",
+            "params": [
+                {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
+                {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
+            ],
+            "return_schema": {
+                "时间范围": "string",
+                "告警类型统计": {"类型名称": "integer"},
+            },
+            "return_description": "返回JSON格式的告警类型分布，包含各类型的数量统计",
+            "url": "/api/alert/type-distribution",
+            "method": "POST",
+            "timeout": 30,
+            "headers": {"Content-Type": "application/json"},
+        }),
+        AlertToolConfig(**{
+            "name": "get_institution_ranking",
+            "description": "获取指定时间范围各机构/区域告警数量排行",
+            "params": [
+                {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
+                {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
+            ],
+            "return_schema": {
+                "时间范围": "string",
+                "区域告警排行": [{"机构名称": "integer"}],
+            },
+            "return_description": "返回JSON格式的机构排行数据，按告警数量降序排列",
+            "url": "/api/alert/institution-ranking",
+            "method": "POST",
+            "timeout": 30,
+            "headers": {"Content-Type": "application/json"},
+        }),
+    ]
+    """告警工具列表，配置各个工具的调用信息"""
+    
+    USE_MOCK_DATA: bool = True
+    """是否使用模拟数据（当 HTTP 调用失败或配置为空时使用）"""
+
+
 class PromptSettings(BaseFileSettings):
     """Prompt 模板.使用 jinja2 格式"""
 
@@ -295,8 +433,9 @@ class PromptSettings(BaseFileSettings):
             "2. 处置合规性：处置步骤是否清晰可追溯，处置结果是否明确\n"
             "3. 原因分析有效性：原因是否明确，内容是否符合逻辑\n"
             "4. 整改闭环：整改措施具体可执行\n"
-            "5. 如果严重违规的告警，是否按照四不放过原则进行分析和整改(事故原因未查清不放过、责任人员未处理不放过、整改措施未落实不放过、有关人员未受到教育不放过),如果没有严格按照四不放过原则进行分析和整改，则直接驳回"
-            "4. 历史一致性：与同类告警处置方案无矛盾，差异需说明合理原因\n\n"
+            "5. 如果严重违规的告警，是否按照四不放过原则进行分析和整改(事故原因未查清不放过、责任人员未处理不放过、整改措施未落实不放过、有关人员未受到教育不放过),"
+            "如果没有严格按照四不放过原则进行分析和整改，则直接驳回\n"
+            "6. 历史一致性：与同类告警处置方案无矛盾，差异需说明合理原因\n\n"
             "【同类电力告警参考】\n"
             "{{retrieved_info}}\n\n"
             "【本次待审核报告】\n"
@@ -348,7 +487,6 @@ class PromptSettings(BaseFileSettings):
             "'防范措施': ''"
             "}"
 
-
         )
     }
 
@@ -366,6 +504,48 @@ class PromptSettings(BaseFileSettings):
     }
     '''RAG 用模板，可用于知识库问答、文件对话'''
 
+    agent: dict = {
+        "default": "{{input}}",
+        "time_parse": (
+            "你是时间类型识别器，**只输出一个英文关键词**，不要任何其他内容：\n"
+            "可选关键词：\n"
+            "today      → 今天\n"
+            "yesterday  → 昨天\n"
+            "last7d     → 近7天\n"
+            "last30d    → 近30天\n"
+            "thisMonth  → 本月\n"
+            "lastMonth  → 上月\n"
+            "thisYear   → 今年\n"
+            "unknown    → 无法识别\n"
+            "识别时间类型：{{question}}\n"
+        ),
+        "alert_polish": (
+            "你是电力监控告警分析专员，处理告警统计数据。\n"
+            "要求：\n"
+            "1. 内容条理清晰，**必须分段换行**，关键信息分点；\n"
+            "2. 完整保留所有数值、时间范围、关键数据，不得删减；\n"
+            "3. 语气专业严谨，贴合电力监控运维场景；\n"
+            "4. 避免冗余废话，语句简洁；\n"
+            "5. 关键数据可用加粗强调（纯文本换行即可）；\n"
+            "6. 禁止输出JSON、代码、表格，全部转为自然段落。\n"
+        
+            "请整理并润色以下告警统计数据，排版分段展示：\n"
+            "{{question}}\n"
+        ),
+        "supervisor": (
+            "仅输出一个单词：alert / rag / llm\n"
+            "1. 告警、告警统计、电厂、地调、调度、故障 → alert\n"
+            "2. 电力监控、电网、电力设备、电力知识 → rag\n"
+            "3. 普通闲聊、常识、其他问题 → llm\n"      
+            "问题：{{question}}\n"
+        ),
+        "empty": (
+            "请你回答我的问题:\n"
+            "{{question}}"
+        ),
+    }
+    '''智能体调用模板'''
+
 
 class SettingsContainer:
     CHATCHAT_ROOT = CHATCHAT_ROOT
@@ -373,6 +553,7 @@ class SettingsContainer:
     basic_settings: BasicSettings = settings_property(BasicSettings())
     kb_settings: KBSettings = settings_property(KBSettings())
     model_settings: ApiModelSettings = settings_property(ApiModelSettings())
+    agent_tools_settings: AgentToolsSettings = settings_property(AgentToolsSettings())
     prompt_settings: PromptSettings = settings_property(PromptSettings())
 
     def create_all_templates(self):
@@ -382,12 +563,17 @@ class SettingsContainer:
             "MODEL_PLATFORMS": {"model_obj": PlatformConfig(),
                                 "is_entire_comment": True}},
             write_file=True)
+        self.agent_tools_settings.create_template_file(sub_comments={
+            "ALERT_TOOLS": {"model_obj": AlertToolConfig(),
+                           "is_entire_comment": True}},
+            write_file=True)
         self.prompt_settings.create_template_file(write_file=True, file_format="yaml")
 
     def set_auto_reload(self, flag: bool = True):
         self.basic_settings.auto_reload = flag
         self.kb_settings.auto_reload = flag
         self.model_settings.auto_reload = flag
+        self.agent_tools_settings.auto_reload = flag
         self.prompt_settings.auto_reload = flag
 
 

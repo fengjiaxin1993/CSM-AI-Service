@@ -4,9 +4,9 @@ import csv
 from io import TextIOWrapper
 from typing import Dict, List, Optional
 
-from langchain.docstore.document import Document
-from langchain_community.document_loaders import CSVLoader
 from langchain_community.document_loaders.helpers import detect_file_encodings
+from langchain_core.documents import Document
+from langchain_community.document_loaders import CSVLoader
 
 
 class FilteredCSVLoader(CSVLoader):

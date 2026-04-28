@@ -1,15 +1,15 @@
 import uuid
 from fastapi import Body
+from langchain_classic.callbacks import AsyncIteratorCallbackHandler
 from sse_starlette.sse import EventSourceResponse
 
 from server.api_server.api_schemas import OpenAIChatOutput
 from server.callback_handler.user_callback_handler import UserCallbackHandler
 from server.chat.utils import History
 from server.db.repository import add_message_to_db
-from langchain.callbacks import AsyncIteratorCallbackHandler
+from langchain_core.prompts import ChatPromptTemplate
 from typing import AsyncIterable
 import asyncio
-from langchain.prompts.chat import ChatPromptTemplate
 from typing import List, Optional
 
 from server.user_base.faiss_user_service import FaissUserService

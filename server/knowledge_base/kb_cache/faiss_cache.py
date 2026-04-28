@@ -1,7 +1,8 @@
 import os
 
-from langchain.docstore.in_memory import InMemoryDocstore
-from langchain.schema import Document
+from langchain_community.docstore import InMemoryDocstore
+from langchain_core.documents import Document
+
 from server.knowledge_base.utils import get_vs_path, get_user_vs_path
 from settings import Settings
 from server.knowledge_base.kb_cache.base import *

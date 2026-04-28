@@ -1,9 +1,9 @@
 import logging
 from typing import Any, Dict, List
 
-from langchain.memory.chat_memory import BaseChatMemory
-from langchain.schema import AIMessage, BaseMessage, HumanMessage, get_buffer_string
-from langchain.schema.language_model import BaseLanguageModel
+from langchain_classic.memory.chat_memory import BaseChatMemory
+from langchain_core.language_models import BaseLanguageModel
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, get_buffer_string
 
 from server.db.models.conversation_model import ConversationModel
 from server.db.repository.conversation_repository import filter_conversation

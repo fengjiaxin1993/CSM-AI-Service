@@ -2,7 +2,7 @@ import os
 import shutil
 from typing import List, Tuple
 
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from server.file_rag.retrievers import VectorstoreRetrieverService
 from server.utils import get_default_embedding

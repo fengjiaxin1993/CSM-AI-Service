@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain.schema import LLMResult
+from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.outputs import LLMResult
 
 from server.db.repository import update_message
 from server.user_base.faiss_user_service import FaissUserService

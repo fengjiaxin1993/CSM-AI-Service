@@ -5,10 +5,9 @@ import uuid
 from typing import AsyncIterable, List, Optional, Literal
 from fastapi import Body, Request, UploadFile, File, Form
 from fastapi.concurrency import run_in_threadpool
+from langchain_classic.callbacks import AsyncIteratorCallbackHandler
 from sse_starlette.sse import EventSourceResponse
-from langchain.callbacks import AsyncIteratorCallbackHandler
-from langchain.prompts.chat import ChatPromptTemplate
-
+from langchain_core.prompts import ChatPromptTemplate
 from server.knowledge_base.kb_cache.faiss_cache import memo_faiss_pool
 from settings import Settings
 from server.api_server.api_schemas import OpenAIChatOutput

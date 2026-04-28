@@ -10,9 +10,9 @@ from openai.types.chat import (
     ChatCompletionToolParam,
     completion_create_params,
 )
+from pydantic import BaseModel, Field
 
 from settings import Settings
-from server.pydantic_v2 import AnyUrl, BaseModel, Field
 from server.utils import MsgType, get_default_llm
 
 
