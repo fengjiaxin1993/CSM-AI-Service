@@ -650,7 +650,7 @@ def get_temp_dir(id: str = None) -> Tuple[str, str]:
 
     from settings import Settings
 
-    if id is not None:  # 如果指定的临时目录已存在，直接返回
+    if id:  # 如果指定的临时目录已存在，直接返回
         path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, id)
         if os.path.isdir(path):
             return path, id

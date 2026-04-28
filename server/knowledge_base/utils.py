@@ -9,7 +9,8 @@ from typing import Dict, Generator, List, Tuple, Union
 
 import chardet
 import langchain_community.document_loaders
-from langchain_community.document_loaders import JSONLoader, TextLoader
+from langchain_community.document_loaders import JSONLoader, TextLoader, UnstructuredFileLoader, CSVLoader, \
+    UnstructuredExcelLoader, Docx2txtLoader, PyMuPDFLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, TextSplitter
 
@@ -32,6 +33,7 @@ def validate_kb_name(knowledge_base_id: str) -> bool:
 
 def get_kb_path(knowledge_base_name: str):
     return os.path.join(Settings.basic_settings.KB_ROOT_PATH, knowledge_base_name)
+
 
 def get_user_path(user_id: str):
     return os.path.join(Settings.basic_settings.USER_ROOT_PATH, user_id)
@@ -109,7 +111,7 @@ LOADER_DICT = {
     "CSVLoader": [".csv"],
     "RapidOCRLoader": [".jpg"],
     "UnstructuredExcelLoader": [".xlsx"],
-    "UnstructuredWordDocumentLoader": [".docx"],
+    "Docx2txtLoader": [".docx"],
     "PyMuPDFLoader": [".pdf"]
 }
 # [".txt",".md",".csv",".jpg",".xlsx",".docx",".pdf"],
@@ -147,6 +149,8 @@ def get_loader(loader_name: str, file_path: str, loader_kwargs: Dict = None):
     """
     根据loader_name和文件路径或内容返回文档加载器。
     """
+    # 确保 file_path 是字符串，避免 WindowsPath 对象导致的问题
+    file_path = str(file_path) if file_path else file_path
     loader_kwargs = loader_kwargs or {}
     try:
         if loader_name in [
@@ -279,7 +283,8 @@ class KnowledgeFile:
         if self.ext not in SUPPORTED_EXTS:
             raise ValueError(f"暂未支持的文件格式 {self.filename}")
         self.loader_kwargs = loader_kwargs
-        self.filepath = get_file_path(knowledge_base_name, filename)
+        # 确保 filepath 是字符串，避免 WindowsPath 对象导致的问题
+        self.filepath = str(get_file_path(knowledge_base_name, filename))
         self.docs = None
         self.splited_docs = None
         self.document_loader_name = get_LoaderClass(self.ext)

@@ -1,3 +1,4 @@
+# Apply pathlib patches before any other imports to fix WindowsPath issues
 import uvicorn
 import logging
 from utils import build_logger

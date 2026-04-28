@@ -2,21 +2,24 @@ import json
 import uuid
 import asyncio
 import httpx
+import os
 from datetime import datetime, timedelta
 from typing import TypedDict, List, AsyncIterable, Optional, Dict, Any
 from langgraph.graph import StateGraph, START, END
 from langchain_core.tools import StructuredTool
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, create_model
-from fastapi import Body
+from fastapi import Body, UploadFile, File, Form
 from sse_starlette.sse import EventSourceResponse
 from langchain_classic.callbacks import AsyncIteratorCallbackHandler
 
 import settings
 from server.api_server.api_schemas import OpenAIChatOutput
 from server.chat.utils import History
-from server.knowledge_base.kb_doc_api import search_docs
-from server.utils import get_ChatOpenAI, get_prompt_template, wrap_done
+from server.knowledge_base.kb_doc_api import search_docs, search_temp_docs
+from server.knowledge_base.kb_cache.faiss_cache import memo_faiss_pool
+from server.knowledge_base.utils import KnowledgeFile, format_reference
+from server.utils import get_ChatOpenAI, get_prompt_template, wrap_done, get_temp_dir, run_in_thread_pool
 from server.db.repository import add_conversation_to_db, filter_conversation
 from server.callback_handler.conversation_callback_handler import ConversationCallbackHandler
 from settings import Settings
@@ -146,6 +149,8 @@ class AgentState(TypedDict):
     alert_response: str
     rag_response: str
     llm_response: str
+    file_parse_response: str
+    kb_name: str  # 临时知识库ID
     raw_data: str
     final_answer: str
     chat_history: List[dict]
@@ -158,7 +163,8 @@ def parse_time(query: str) -> dict:
     today = datetime.now().date()
     prompt = get_prompt_template("agent", "time_parse")
     llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=0)
-    time_type = (ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
+    time_type = (ChatPromptTemplate.from_messages(
+        [History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
         {"question": query}).content.strip()
 
     log(f"时间类型: {time_type}")
@@ -203,10 +209,36 @@ def time_parse_node(state: AgentState) -> AgentState:
 
 def supervisor_node(state: AgentState) -> AgentState:
     log("Supervisor路由判断")
+    query = state["query"]
+    kb_name = state.get("kb_name", "")
+
+    # 如果有上传文件，先判断问题是否与文件内容相关
+    if kb_name:
+        log(f"检测到文件上传，知识库ID: {kb_name}，判断问题是否与文件相关...")
+        try:
+            # 先从临时知识库中检索文档
+            docs = search_temp_docs(
+                knowledge_id=kb_name,
+                query=query,
+                top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K,
+                score_threshold=Settings.kb_settings.SCORE_THRESHOLD
+            )
+            # 如果检索到相关文档，则走文件解析路由
+            if docs:
+                log(f"问题与文件内容相关，检索到 {len(docs)} 个相关文档")
+                state["route"] = "file_parse"
+                return state
+            else:
+                log("问题与文件内容不相关，继续走原有逻辑")
+        except Exception as e:
+            log(f"文件相关性判断失败: {e}，继续走原有逻辑")
+
+    # 原有逻辑
     prompt = get_prompt_template("agent", "supervisor")
     llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=0)
-    state["route"] = (ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
-        {"question": state["query"]}).content.strip()
+    state["route"] = (ChatPromptTemplate.from_messages(
+        [History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
+        {"question": query}).content.strip()
     log(f"路由结果: {state['route']}")
     return state
 
@@ -232,11 +264,13 @@ def alert_agent(state: AgentState) -> AgentState:
             args = call["args"]
             args.update({"start_date": state["start_date"], "end_date": state["end_date"]})
             result = tool.invoke(args)
-            log(f"工具返回 [{tool.name}]: {result[:200]}..." if len(result) > 200 else f"工具返回 [{tool.name}]: {result}")
+            log(f"工具返回 [{tool.name}]: {result[:200]}..." if len(
+                result) > 200 else f"工具返回 [{tool.name}]: {result}")
             results.append(result)
 
     state["alert_response"] = "\n".join(results)
-    log(f"告警Agent结果【总结】: {state['alert_response'][:200]}..." if len(state['alert_response']) > 200 else f"告警Agent结果: {state['alert_response']}")
+    log(f"告警Agent结果【总结】: {state['alert_response'][:200]}..." if len(
+        state['alert_response']) > 200 else f"告警Agent结果: {state['alert_response']}")
     return state
 
 
@@ -257,9 +291,11 @@ def rag_agent(state: AgentState) -> AgentState:
     prompt = get_prompt_template("rag", prompt_name)
     llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=Settings.model_settings.TEMPERATURE)
     state["rag_response"] = (
-                ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
+            ChatPromptTemplate.from_messages(
+                [History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
         {"context": context, "question": state["query"]}).content
-    log(f"RAG生成结果: {state['rag_response'][:200]}..." if len(state['rag_response']) > 200 else f"RAG生成结果: {state['rag_response']}")
+    log(f"RAG生成结果: {state['rag_response'][:200]}..." if len(
+        state['rag_response']) > 200 else f"RAG生成结果: {state['rag_response']}")
     return state
 
 
@@ -268,25 +304,72 @@ def llm_agent(state: AgentState) -> AgentState:
     prompt = get_prompt_template("llm_model", "default")
     llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=Settings.model_settings.TEMPERATURE)
     state["llm_response"] = (
-                ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
+            ChatPromptTemplate.from_messages(
+                [History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
         {"input": state["query"]}).content
+    return state
+
+
+def file_parse_agent(state: AgentState) -> AgentState:
+    log("===== 文件解析智能体 =====")
+    kb_name = state.get("kb_name", "")
+
+    if not kb_name:
+        state["file_parse_response"] = "未提供知识库ID，无法检索文件内容"
+        return state
+
+    try:
+        # 从临时知识库中检索文档
+        docs = search_temp_docs(
+            knowledge_id=kb_name,
+            query=state["query"],
+            top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K,
+            score_threshold=Settings.kb_settings.SCORE_THRESHOLD
+        )
+        context = "\n\n".join([d["page_content"] for d in docs])
+        log(f"文件解析检索到 {len(docs)} 个文档")
+        if docs:
+            log(f"检索内容预览: {context[:200]}..." if len(context) > 200 else f"检索内容: {context}")
+
+        # 使用RAG方式生成回答
+        prompt_name = "empty" if not docs else "default"
+        prompt = get_prompt_template("rag", prompt_name)
+        llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=Settings.model_settings.TEMPERATURE)
+        state["file_parse_response"] = (
+                ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm
+        ).invoke({"context": context, "question": state["query"]}).content
+
+        log(f"文件解析生成结果: {state['file_parse_response'][:200]}..." if len(
+            state['file_parse_response']) > 200 else f"文件解析生成结果: {state['file_parse_response']}")
+    except Exception as e:
+        log(f"文件解析失败: {e}")
+        state["file_parse_response"] = f"文件解析失败: {str(e)}"
+
     return state
 
 
 def merge_node(state: AgentState) -> AgentState:
     log("合并结果")
-    raw = state["alert_response"] if state["route"] == "alert" else state["rag_response"] if state[
-                                                                                                 "route"] == "rag" else \
-    state["llm_response"]
+    route = state["route"]
+    if route == "alert":
+        raw = state["alert_response"]
+    elif route == "rag":
+        raw = state["rag_response"]
+    elif route == "file_parse":
+        raw = state["file_parse_response"]
+    else:
+        raw = state["llm_response"]
+
     log(f"原始数据: {raw[:200]}..." if len(raw) > 200 else f"原始数据: {raw}")
 
-    if state["route"] == "alert":
+    if route == "alert":
         log("调用润色模型整理告警结果...")
         try:
             prompt = get_prompt_template("agent", "alert_polish")
             llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL,
                                  temperature=Settings.model_settings.TEMPERATURE)
-            final = (ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
+            final = (ChatPromptTemplate.from_messages(
+                [History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
                 {"question": raw}).content.strip()
             log("润色完成")
         except:
@@ -314,15 +397,17 @@ def create_agent():
 
     for name, func in [("supervisor", supervisor_node), ("time_parse", time_parse_node),
                        ("alert_agent", alert_agent), ("rag_agent", rag_agent),
-                       ("llm_agent", llm_agent), ("merge", merge_node), ("save_history", save_history)]:
+                       ("file_parse_agent", file_parse_agent), ("llm_agent", llm_agent),
+                       ("merge", merge_node), ("save_history", save_history)]:
         workflow.add_node(name, func)
 
     workflow.add_edge(START, "supervisor")
     workflow.add_conditional_edges("supervisor",
                                    lambda s: "time_parse" if s["route"] == "alert" else s["route"],
-                                   {"time_parse": "time_parse", "rag": "rag_agent", "llm": "llm_agent"})
+                                   {"time_parse": "time_parse", "rag": "rag_agent", "file_parse": "file_parse_agent",
+                                    "llm": "llm_agent"})
     workflow.add_edge("time_parse", "alert_agent")
-    for node in ["alert_agent", "rag_agent", "llm_agent"]:
+    for node in ["alert_agent", "rag_agent", "file_parse_agent", "llm_agent"]:
         workflow.add_edge(node, "merge")
     workflow.add_edge("merge", "save_history")
     workflow.add_edge("save_history", END)
@@ -331,15 +416,21 @@ def create_agent():
 
 
 # ====================== API接口 ======================
+
+
 async def agent_chat(
         query: str = Body("最近7天告警情况如何", description="用户问题"),
         stream: bool = Body(False, description="流式输出"),
-        conversation_id: str = Body("test1", description="对话框id")
+        conversation_id: str = Body("test1", description="对话框id"),
+        kb_name: str = Body("", description="临时知识库ID，用于文件解析，通过upload_agent_files接口获取")
 ):
     """电力告警智能体对话接口"""
 
+    # 优先使用 file_id，如果没有则使用 kb_name
+
     async def iterator() -> AsyncIterable[str]:
         log(f"\n========== 请求开始: {query} ==========")
+        log(f"知识库ID: {kb_name if kb_name else '无'}")
 
         msg_id = add_conversation_to_db(conversation_id, "agent_chat", query, "")
 
@@ -356,8 +447,8 @@ async def agent_chat(
             state = agent.invoke({
                 "query": query, "route": "", "time_desc": "", "start_date": "", "end_date": "",
                 "query_year": 0, "query_month": 0, "alert_response": "", "rag_response": "",
-                "llm_response": "", "raw_data": "", "final_answer": "", "chat_history": history,
-                "conversation_id": conversation_id
+                "file_parse_response": "", "kb_name": kb_name, "llm_response": "", "raw_data": "",
+                "final_answer": "", "chat_history": history, "conversation_id": conversation_id
             })
             from server.db.repository import update_conversation
             update_conversation(msg_id, state["final_answer"])
@@ -368,23 +459,21 @@ async def agent_chat(
         # 流式处理
         supervisor_state = supervisor_node(
             {"query": query, "route": "", "time_desc": "", "start_date": "", "end_date": "", "query_year": 0,
-             "query_month": 0, "alert_response": "", "rag_response": "", "llm_response": "", "raw_data": "",
-             "final_answer": "", "chat_history": history, "conversation_id": conversation_id})
+             "query_month": 0, "alert_response": "", "rag_response": "", "file_parse_response": "",
+             "kb_name": kb_name, "llm_response": "", "raw_data": "", "final_answer": "", "chat_history": history,
+             "conversation_id": conversation_id})
         route = supervisor_state["route"]
 
         if route == "alert":
             state = alert_agent(time_parse_node(supervisor_state.copy()))
             raw_data = state["alert_response"]
-            # log(f"合并结果 | 原始数据: {raw_data[:200]}..." if len(raw_data) > 200 else f"合并结果 | 原始数据: {raw_data}")
             log("调用润色模型整理告警结果...")
             prompt = get_prompt_template("agent", "alert_polish")
         elif route == "rag":
             state = supervisor_state.copy()
-            loop = asyncio.get_event_loop()
-            docs = await loop.run_in_executor(None,
-                                              lambda: search_docs(query, Settings.kb_settings.DEFAULT_KNOWLEDGE_BASE,
+            docs = search_docs(query, Settings.kb_settings.DEFAULT_KNOWLEDGE_BASE,
                                                                   Settings.kb_settings.VECTOR_SEARCH_TOP_K,
-                                                                  Settings.kb_settings.SCORE_THRESHOLD))
+                                                                  Settings.kb_settings.SCORE_THRESHOLD)
             context = "\n\n".join([d["page_content"] for d in docs])
             log(f"流式RAG检索到 {len(docs)} 个文档")
             if docs:
@@ -393,6 +482,25 @@ async def agent_chat(
             prompt = get_prompt_template("rag", prompt_name)
             raw_data = f"[RAG检索到{len(docs)}个文档]"
             log(f"合并结果 | RAG路由: {raw_data}")
+        elif route == "file_parse":
+            state = supervisor_state.copy()
+            loop = asyncio.get_event_loop()
+            if kb_name:
+                docs = search_temp_docs(kb_name, query, Settings.kb_settings.VECTOR_SEARCH_TOP_K,
+                                                                  Settings.kb_settings.SCORE_THRESHOLD)
+                context = "\n\n".join([d["page_content"] for d in docs])
+                log(f"流式文件解析检索到 {len(docs)} 个文档")
+                if docs:
+                    log(f"流式文件解析检索内容预览: {context[:200]}..." if len(
+                        context) > 200 else f"流式文件解析检索内容: {context}")
+            else:
+                docs = []
+                context = ""
+                log("未提供知识库ID，无法进行文件解析")
+            prompt_name = "empty" if not docs else "default"
+            prompt = get_prompt_template("rag", prompt_name)
+            raw_data = f"[文件解析检索到{len(docs)}个文档]"
+            log(f"合并结果 | 文件解析路由: {raw_data}")
         else:
             state = supervisor_state.copy()
             log("合并结果 | 直接使用LLM回复")
@@ -408,15 +516,18 @@ async def agent_chat(
 
         if route == "alert":
             task = asyncio.create_task(wrap_done(
-                (ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).ainvoke(
+                (ChatPromptTemplate.from_messages(
+                    [History(role="user", content=prompt).to_msg_template(False)]) | llm).ainvoke(
                     {"question": raw_data}), callback.done))
-        elif route == "rag":
+        elif route == "rag" or route == "file_parse":
             task = asyncio.create_task(wrap_done(
-                (ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).ainvoke(
+                (ChatPromptTemplate.from_messages(
+                    [History(role="user", content=prompt).to_msg_template(False)]) | llm).ainvoke(
                     {"context": context, "question": query}), callback.done))
         else:
             task = asyncio.create_task(wrap_done(
-                (ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm).ainvoke(
+                (ChatPromptTemplate.from_messages(
+                    [History(role="user", content=prompt).to_msg_template(False)]) | llm).ainvoke(
                     {"input": query}), callback.done))
 
         full = ""

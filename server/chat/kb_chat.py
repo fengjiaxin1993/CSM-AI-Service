@@ -35,17 +35,19 @@ def _parse_files_in_thread(
     生成器返回保存结果：[success or error, filename, msg, docs]
     """
 
-    def parse_file(file: UploadFile) -> dict:
+    def parse_file(file: UploadFile) -> tuple:
         """
         保存单个文件。
         """
+        filename = None
         try:
             filename = file.filename
-            file_path = os.path.join(dir, filename)
+            file_path = os.path.join(str(dir), str(filename))
             file_content = file.file.read()  # 读取上传文件的内容
 
-            if not os.path.isdir(os.path.dirname(file_path)):
-                os.makedirs(os.path.dirname(file_path))
+            parent_dir = os.path.dirname(file_path)
+            if parent_dir and not os.path.isdir(parent_dir):
+                os.makedirs(parent_dir)
             with open(file_path, "wb") as f:
                 f.write(file_content)
             kb_file = KnowledgeFile(filename=filename, knowledge_base_name="temp")
@@ -55,10 +57,12 @@ def _parse_files_in_thread(
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
             )
-            return True, filename, f"成功上传文件 {filename}", docs
+            return (True, filename, f"成功上传文件 {filename}", docs)
         except Exception as e:
+            if filename is None:
+                filename = getattr(file, 'filename', 'unknown')
             msg = f"{filename} 文件上传失败，报错信息为: {e}"
-            return False, filename, msg, []
+            return (False, filename, msg, [])
 
     params = [{"file": file} for file in files]
     for result in run_in_thread_pool(parse_file, params=params):
@@ -76,7 +80,7 @@ def upload_temp_docs(
     将文件保存到临时目录，并进行向量化。
     返回临时目录名称作为ID，同时也是临时向量库的ID。
     """
-    if prev_id is not None:
+    if not prev_id:
         memo_faiss_pool.pop(prev_id)
 
     failed_files = []

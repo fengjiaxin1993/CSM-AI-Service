@@ -45,7 +45,7 @@ def search_temp_docs(knowledge_id: str, query: str, top_k: int, score_threshold:
             score_threshold=score_threshold,
         )
         docs = retriever.get_relevant_documents(query)
-        data = [DocumentWithVSId(**x.dict(), id=x.metadata.get("id")) for x in docs]
+        data = [DocumentWithVSId(**x.dict()) for x in docs]
     return [x.dict() for x in data]
     # with memo_faiss_pool.acquire(knowledge_id) as vs:
     #     logger.info("【调用该方法】")
@@ -128,7 +128,7 @@ def _save_files_in_thread(
                     and os.path.getsize(file_path) == len(file_content)
             ):
                 file_status = f"文件 {filename} 已存在。"
-                logger.warn(file_status)
+                logger.warning(file_status)
                 return dict(code=404, msg=file_status, data=data)
 
             if not os.path.isdir(os.path.dirname(file_path)):
