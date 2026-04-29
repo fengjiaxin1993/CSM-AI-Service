@@ -4,14 +4,17 @@ from server.utils import BaseResponse
 
 # 设备类型映射：英文标识 -> 中文名称
 DEVICE_TYPE_MAP = {
-    "security": "监测装置",
-    "encryption": "纵向加密",
-    "card": "加密卡",
-    "firewall": "防火墙",
-    "isolation": "横向隔离",
-    "detection": "入侵检测",
-    "malicious": "恶意代码",
-    "gateway": "运维网关"
+    "1303": "防火墙",
+    "1301": "隔离装置",
+    "1302": "纵向加密",
+    "1304": "入侵检测",
+    "1305": "监测装置",
+    "1306": "加密卡",
+    "1307": "运维网关",
+    "1202": "网络设备",
+    "1101": "服务器",
+    "1102": "工作站",
+    "1033": "防恶意代码"
 }
 
 
@@ -42,13 +45,13 @@ def get_device_types(maintenance_object: str, affected_object: str, work_content
     device_types = []
 
     if is_substation:  # 厂站
-        if DEVICE_TYPE_MAP["security"] in all_content:
-            device_types.append("security")
-        if DEVICE_TYPE_MAP["encryption"] in all_content:
-            device_types.append("encryption")
+        if DEVICE_TYPE_MAP["1305"] in all_content:
+            device_types.append("1305")
+        if DEVICE_TYPE_MAP["1302"] in all_content:
+            device_types.append("1302")
         if len(device_types) == 0:
-            device_types.append("security")
-            device_types.append("encryption")
+            device_types.append("1305")
+            device_types.append("1302")
     else:  # 主站
         for k, v in DEVICE_TYPE_MAP.items():
             if v in all_content:

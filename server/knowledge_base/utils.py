@@ -106,7 +106,7 @@ def list_files_from_folder(kb_name: str):
 
 
 LOADER_DICT = {
-    "UnstructuredFileLoader": [".txt"],
+    "TextLoader": [".txt"],
     "UnstructuredMarkdownLoader": [".md"],
     "CSVLoader": [".csv"],
     "RapidOCRLoader": [".jpg"],
