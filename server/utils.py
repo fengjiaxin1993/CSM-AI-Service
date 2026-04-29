@@ -178,9 +178,11 @@ def get_ChatOpenAI(
             openai_api_base=model_info.get("llm_base_url"),
             openai_api_key=model_info.get("api_key"),
             openai_proxy=model_info.get("api_proxy"),
-            # extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-            extra_body = {"enable_thinking": False}
         )
+        if Settings.model_settings.IS_ALIYUN_PLATFORM:
+            params.update(extra_body = {"enable_thinking": False})
+        else:
+            params.update(extra_body={"chat_template_kwargs": {"enable_thinking": False}})
         model = ChatOpenAI(**params)
     except Exception as e:
         logger.error(

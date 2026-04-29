@@ -146,10 +146,10 @@ class KBSettings(BaseFileSettings):
     OVERLAP_SIZE: int = 150
     """知识库中相邻文本重合长度(不适用MarkdownHeaderTextSplitter)"""
 
-    VECTOR_SEARCH_TOP_K: int = 3
+    VECTOR_SEARCH_TOP_K: int = 5
     """知识库匹配向量数量"""
 
-    SCORE_THRESHOLD: float = 0.3
+    SCORE_THRESHOLD: float = 0.2
     """知识库匹配相关度阈值，采用相似度，取值范围在-1-1之间，SCORE越大，相关度越高，取到-1相当于不筛选，建议设置在0.3左右"""
 
     ZH_TITLE_ENHANCE: bool = False
@@ -213,6 +213,9 @@ class ApiModelSettings(BaseFileSettings):
 
     DEFAULT_LLM_MODEL: str = "qwen2.5:0.5b"
     """默认选用的 LLM 名称"""
+
+    IS_ALIYUN_PLATFORM: bool = True
+    """针对openAI, 是否是阿里云百练平台的接口"""
 
     DEFAULT_EMBEDDING_MODEL: str = "quentinz/bge-small-zh-v1.5"
     """默认选用的 Embedding 名称"""
@@ -538,6 +541,14 @@ class PromptSettings(BaseFileSettings):
             "2. 电力监控、电网、电力设备、电力知识 → rag\n"
             "3. 普通闲聊、常识、其他问题 → llm\n"      
             "问题：{{question}}\n"
+        ),
+        "file_related": (
+            "请判断以下用户提问是否需要对文档进行操作。\n"
+            "用户提问: {question}\n"
+            "请只回答 YES 或 NO:\n"
+                "- YES: 需要针对文档进行操作（总结、概括、提取、解读、分析、对比文档内容等）\n"
+                "- NO: 无文档操作需求的所有问题\n"
+            "回答:\n"
         ),
         "empty": (
             "请你回答我的问题:\n"

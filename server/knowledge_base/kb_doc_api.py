@@ -44,8 +44,13 @@ def search_temp_docs(knowledge_id: str, query: str, top_k: int, score_threshold:
             top_k=top_k,
             score_threshold=score_threshold,
         )
-        docs = retriever.get_relevant_documents(query)
-        data = [DocumentWithVSId(**x.dict()) for x in docs]
+        docs_with_scores = vs.similarity_search_with_score(query, k=top_k)
+        # 过滤低于阈值的结果（FAISS中分数越小越相似，L2距离）
+        filtered_docs = [
+            (doc, score) for doc, score in docs_with_scores
+            if score >= score_threshold
+        ]
+        data = [DocumentWithVSId(page_content=x[0].page_content, metadata=x[0].metadata, score=x[1], id=x[0].metadata.get("id")) for x in filtered_docs]
     return [x.dict() for x in data]
     # with memo_faiss_pool.acquire(knowledge_id) as vs:
     #     logger.info("【调用该方法】")

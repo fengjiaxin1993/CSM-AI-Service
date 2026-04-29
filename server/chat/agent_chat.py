@@ -207,29 +207,52 @@ def time_parse_node(state: AgentState) -> AgentState:
     return state
 
 
+def _check_doc_operation_intent(query: str) -> bool:
+    """使用大模型判断用户提问是否需要文档操作（总结、提取、解读等）"""
+    try:
+        prompt = get_prompt_template("agent", "file_related")
+        llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=0)
+        result = (ChatPromptTemplate.from_messages(
+            [History(role="user", content=prompt).to_msg_template(False)]) | llm).invoke(
+            {"question": query}).content.strip().upper()
+        is_doc_operation = "YES" in result
+        log(f"大模型判断文档操作意图: {result} -> {'需要' if is_doc_operation else '不需要'}文档操作")
+        return is_doc_operation
+    except Exception as e:
+        log(f"文档操作意图判断失败: {e}，默认继续其他逻辑")
+        return False
+
+
 def supervisor_node(state: AgentState) -> AgentState:
     log("Supervisor路由判断")
     query = state["query"]
     kb_name = state.get("kb_name", "")
 
-    # 如果有上传文件，先判断问题是否与文件内容相关
+    # 如果有上传文件，先判断问题是否需要文档操作
     if kb_name:
-        log(f"检测到文件上传，知识库ID: {kb_name}，判断问题是否与文件相关...")
+        log(f"检测到文件上传，知识库ID: {kb_name}，判断问题是否需要文档操作...")
+        
+        # 第一层：使用大模型判断是否需要文档操作
+        if _check_doc_operation_intent(query):
+            log("大模型判断需要文档操作，路由到 file_parse")
+            state["route"] = "file_parse"
+            return state
+        
+        # 第二层：通过向量检索判断内容相关性
+        log("大模型判断不需要文档操作，继续通过向量检索判断内容相关性...")
         try:
-            # 先从临时知识库中检索文档
             docs = search_temp_docs(
                 knowledge_id=kb_name,
                 query=query,
                 top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K,
                 score_threshold=Settings.kb_settings.SCORE_THRESHOLD
             )
-            # 如果检索到相关文档，则走文件解析路由
             if docs:
-                log(f"问题与文件内容相关，检索到 {len(docs)} 个相关文档")
+                log(f"向量检索判断问题与文件内容相关，检索到 {len(docs)} 个相关文档")
                 state["route"] = "file_parse"
                 return state
             else:
-                log("问题与文件内容不相关，继续走原有逻辑")
+                log("向量检索判断问题与文件内容不相关，继续走原有逻辑")
         except Exception as e:
             log(f"文件相关性判断失败: {e}，继续走原有逻辑")
 
