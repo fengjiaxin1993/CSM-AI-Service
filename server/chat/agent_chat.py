@@ -67,6 +67,7 @@ def _call_api(name: str, url: str, method: str, headers: dict, timeout: int, pay
 
     try:
         method = method.upper()
+        headers["User"] = "00616400000082"
         with httpx.Client(timeout=timeout) as client:
             if method == "GET":
                 resp = client.get(full_url, params=payload, headers=headers)
