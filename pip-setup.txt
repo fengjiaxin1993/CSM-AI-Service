@@ -1,21 +1,27 @@
 conda create -n ICDO-RNV python==3.10
 pip install langchain langchain-openai langgraph langchain_community
-fastapi
-uvicorn
-sse_starlette
-PyMuPDF
-json_repair
-numpy
-bs4
-docxtpl
-sqlalchemy
+
+pip install uvicorn PyMuPDF json_repair
+
+pip install numpy bs4 docxtpl sqlalchemy
+
 pip install pillow
 pip install opencv-python
-chardet
-nltk
-memoization
+pip install chardet nltk memoization
 pip install ruamel.yaml
-cx_Freeze
-loguru
+
+pip install cx_Freeze loguru
 pip install python-multipart
 pip install faiss-cpu
+pip install uvicorn[standard]
+
+pip install fastapi==0.115.9
+sse-starlette==1.8.2
+pip install uuid
+pip install unstructured
+pip install click
+
+pip install docx2txt
+
+pip install openpyxl pandas
+pip install msoffcrypto

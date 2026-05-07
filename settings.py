@@ -72,11 +72,11 @@ class BasicSettings(BaseFileSettings):
     KB_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/knowledge_base")
     """知识库默认存储路径"""
 
-    WARNING_KNOWLEDGE_PATH: str = str(CHATCHAT_ROOT / "data/warning_knowledge")
-    """告警知识库默认存储路径， 与通用知识库不通，有特定处理"""
-
     USER_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/user")
     """记录用户历史对话记录的存储路径"""
+
+    WARNING_NOTICE_PATH: str = str(CHATCHAT_ROOT / "data/warning_notice")
+    """记录存储告警整改通知单的目录"""
 
     DB_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/knowledge_base/info.db")
     """数据库默认存储路径。如果使用sqlite，可以直接修改DB_ROOT_PATH；如果使用其它数据库，请直接修改SQLALCHEMY_DATABASE_URI。"""
@@ -114,7 +114,7 @@ class BasicSettings(BaseFileSettings):
             p.mkdir(parents=True, exist_ok=True)
         Path(self.KB_ROOT_PATH).mkdir(parents=True, exist_ok=True)
         Path(self.USER_ROOT_PATH).mkdir(parents=True, exist_ok=True)
-        Path(self.WARNING_KNOWLEDGE_PATH).mkdir(parents=True, exist_ok=True)
+        Path(self.WARNING_NOTICE_PATH).mkdir(parents=True, exist_ok=True)
 
 
 class KBSettings(BaseFileSettings):

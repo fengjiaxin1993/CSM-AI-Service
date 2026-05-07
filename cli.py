@@ -1,4 +1,3 @@
-# cli_group.py
 import warnings
 # 屏蔽 pydantic 模块下所有 UserWarning
 warnings.filterwarnings("ignore", category=UserWarning, module=r"pydantic.*")
@@ -21,6 +20,7 @@ def main():
 @main.command("init", help="项目初始化")
 def init():
     Settings.set_auto_reload(False)
+    bs = Settings.basic_settings
     logger.info(f"开始初始化项目数据目录：{Settings.CHATCHAT_ROOT}")
     Settings.basic_settings.make_dirs()
     logger.info("创建所有数据目录：成功。")
