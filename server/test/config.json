@@ -1,0 +1,78 @@
+{
+  "tools": [
+    {
+      "tool_name": "get_alert_overview",
+      "description": "获取告警概览统计，包括告警总数、紧急告警数、重要告警数等",
+      "method": "POST",
+      "url": "http://127.0.0.1:7862/tools/alert/overview",
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": true,
+          "description": "开始日期，格式YYYY-MM-DD"
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": true,
+          "description": "结束日期，格式YYYY-MM-DD"
+        }
+      ]
+    },
+    {
+      "tool_name": "get_alert_trend",
+      "description": "获取告警趋势数据，返回每日告警数量变化趋势",
+      "method": "POST",
+      "url": "http://127.0.0.1:7862/tools/alert/trend",
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "tool_name": "get_alert_type_dist",
+      "description": "获取指定时间范围告警类型分布统计",
+      "method": "POST",
+      "url": "http://127.0.0.1:7862/tools/alert/type-dist",
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "tool_name": "get_institution_ranking",
+      "description": "获取指定时间范围各机构/区域告警数量排行",
+      "method": "POST",
+      "url": "http://127.0.0.1:7862/tools/alert/institution-ranking",
+      "parameters": [
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

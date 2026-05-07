@@ -3,6 +3,7 @@ import uuid
 import asyncio
 import httpx
 import os
+import re
 from datetime import datetime, timedelta
 from typing import TypedDict, List, AsyncIterable, Optional, Dict, Any
 from langgraph.graph import StateGraph, START, END
@@ -55,7 +56,10 @@ def _create_schema(params: list):
 def _call_api(name: str, url: str, method: str, headers: dict, timeout: int, payload: dict) -> Optional[str]:
     """同步调用API"""
     base_url = Settings.agent_tools_settings.ALERT_API_BASE_URL
+    log(f"📡 API配置: base_url={base_url}")
+
     if not base_url:
+        log(f"❌ API未配置: ALERT_API_BASE_URL 为空")
         return None
 
     # 正确处理 URL 拼接，避免双斜杠
@@ -63,7 +67,8 @@ def _call_api(name: str, url: str, method: str, headers: dict, timeout: int, pay
     url_path = url.lstrip('/')
     full_url = f"{base_url}/{url_path}"
 
-    log(f"API请求: {method.upper()} {full_url}, payload={payload}, headers={headers}")
+    log(f"🚀 API请求: {method.upper()} {full_url}")
+    log(f"📦 Payload: {payload}")
 
     try:
         method = method.upper()
@@ -74,16 +79,20 @@ def _call_api(name: str, url: str, method: str, headers: dict, timeout: int, pay
             else:
                 resp = client.post(full_url, json=payload, headers=headers)
         resp.raise_for_status()
-        log(f"API响应: {resp.status_code}")
+        log(f"✅ API响应成功: status={resp.status_code}, content_length={len(resp.text)}")
+        log(f"📄 响应内容预览: {resp.text[:200]}..." if len(resp.text) > 200 else f"📄 响应内容: {resp.text}")
         return resp.text
     except httpx.TimeoutException as e:
-        log(f"API调用超时: {name}, timeout={timeout}s, error={e}")
+        log(f"❌ API调用超时: {name}, timeout={timeout}s, error={e}")
         return None
     except httpx.ConnectError as e:
-        log(f"API连接失败: {name}, url={full_url}, error={e}")
+        log(f"❌ API连接失败: {name}, url={full_url}, error={e}")
+        return None
+    except httpx.HTTPStatusError as e:
+        log(f"❌ API返回错误状态码: {name}, status={e.response.status_code}, response={e.response.text[:200]}")
         return None
     except Exception as e:
-        log(f"API调用失败: {name}, error={type(e).__name__}: {e}")
+        log(f"❌ API调用失败: {name}, error={type(e).__name__}: {e}")
         return None
 
 
@@ -103,13 +112,22 @@ def _tool_impl(name: str, url: str, method: str, headers: dict, timeout: int, **
     """工具执行实现"""
     start, end = kwargs.get("start_date", ""), kwargs.get("end_date", "")
     log(f"调用工具: {name} | {start} ~ {end}")
+    log(f"配置检查: USE_MOCK_DATA={Settings.agent_tools_settings.USE_MOCK_DATA}, ALERT_API_BASE_URL={Settings.agent_tools_settings.ALERT_API_BASE_URL}")
 
     # 尝试API调用
     if not Settings.agent_tools_settings.USE_MOCK_DATA:
+        log(f"🌐 尝试调用真实API: {name}")
         result = _call_api(name, url, method, headers, timeout, {"start_date": start, "end_date": end})
         if result:
             log(f"✅ API成功: {name}")
             return result
+        else:
+            log(f"❌ API调用失败或无数据，将返回错误信息")
+            return json.dumps(
+                {"error": "API调用失败", "tool": name, "message": "无法连接到告警API服务，请检查ALERT_API_BASE_URL配置"},
+                ensure_ascii=False)
+    else:
+        log(f"⚠️ USE_MOCK_DATA=True，使用模拟数据")
 
     # 回退到模拟数据
     return _mock_data(name, start, end)
@@ -232,13 +250,13 @@ def supervisor_node(state: AgentState) -> AgentState:
     # 如果有上传文件，先判断问题是否需要文档操作
     if kb_name:
         log(f"检测到文件上传，知识库ID: {kb_name}，判断问题是否需要文档操作...")
-        
+
         # 第一层：使用大模型判断是否需要文档操作
         if _check_doc_operation_intent(query):
             log("大模型判断需要文档操作，路由到 file_parse")
             state["route"] = "file_parse"
             return state
-        
+
         # 第二层：通过向量检索判断内容相关性
         log("大模型判断不需要文档操作，继续通过向量检索判断内容相关性...")
         try:
@@ -275,24 +293,84 @@ def alert_agent(state: AgentState) -> AgentState:
         return state
 
     llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=Settings.model_settings.TEMPERATURE)
-    llm_with_tools = llm.bind_tools(tools)
 
-    system = f"查询时间范围：{state['start_date']} ~ {state['end_date']}，调用对应告警工具"
-    resp = (ChatPromptTemplate.from_messages([("system", system), ("user", "{query}")]) | llm_with_tools).invoke(
-        {"query": state["query"]})
+    # 华为昇腾等国产模型可能不支持 tool_choice="auto"，使用手动工具调用方式
+    try:
+        # 先尝试使用 bind_tools（兼容OpenAI标准）
+        llm_with_tools = llm.bind_tools(tools, tool_choice="auto")
+        system = f"查询时间范围：{state['start_date']} ~ {state['end_date']}，调用对应告警工具"
+        resp = (ChatPromptTemplate.from_messages([("system", system), ("user", "{query}")]) | llm_with_tools).invoke(
+            {"query": state["query"]})
 
-    results = []
-    for call in resp.tool_calls:
-        tool = next((t for t in tools if t.name == call["name"]), None)
-        if tool:
-            args = call["args"]
-            args.update({"start_date": state["start_date"], "end_date": state["end_date"]})
-            result = tool.invoke(args)
-            log(f"工具返回 [{tool.name}]: {result[:200]}..." if len(
-                result) > 200 else f"工具返回 [{tool.name}]: {result}")
-            results.append(result)
+        results = []
+        if hasattr(resp, 'tool_calls') and resp.tool_calls:
+            for call in resp.tool_calls:
+                tool = next((t for t in tools if t.name == call["name"]), None)
+                if tool:
+                    args = call["args"]
+                    args.update({"start_date": state["start_date"], "end_date": state["end_date"]})
+                    result = tool.invoke(args)
+                    log(f"工具返回 [{tool.name}]: {result[:200]}..." if len(
+                        result) > 200 else f"工具返回 [{tool.name}]: {result}")
+                    results.append(result)
 
-    state["alert_response"] = "\n".join(results)
+        state["alert_response"] = "\n".join(results) if results else "未能获取告警数据"
+
+    except Exception as e:
+        log(f"bind_tools 调用失败，使用手动工具选择降级方案: {e}")
+        # 降级方案：使用提示词让LLM选择工具，然后手动解析
+        from langchain_core.output_parsers import JsonOutputParser
+
+        tool_descriptions = "\n".join([
+            f"- {t.name}: {t.description}" for t in tools
+        ])
+
+        manual_prompt = f"""查询时间范围：{state['start_date']} ~ {state['end_date']}
+用户问题：{state["query"]}
+
+可用工具：
+{tool_descriptions}
+
+请判断需要调用哪个工具来获取数据，以JSON格式返回：
+{{"tool_name": "工具名称", "reason": "选择原因"}}
+如果不需要调用工具，返回：{{"tool_name": "none", "reason": "原因"}}
+"""
+
+        try:
+            llm_response = llm.invoke(manual_prompt)
+            try:
+                # 尝试解析JSON响应
+                response_text = llm_response.content if hasattr(llm_response, 'content') else str(llm_response)
+                # 提取JSON部分
+                json_match = re.search(r'\{.*?\}', response_text, re.DOTALL)
+                if json_match:
+                    selection = json.loads(json_match.group())
+                    selected_tool_name = selection.get("tool_name", "none")
+
+                    if selected_tool_name != "none":
+                        tool = next((t for t in tools if t.name == selected_tool_name), None)
+                        if tool:
+                            args = {"start_date": state["start_date"], "end_date": state["end_date"]}
+                            log(f"🔧 手动调用工具: {tool.name}, args={args}")
+                            result = tool.invoke(args)
+                            log(f"✅ 手动选择工具 [{tool.name}] 返回: {result[:200]}..." if len(
+                                result) > 200 else f"✅ 手动选择工具 [{tool.name}] 返回: {result}")
+                            state["alert_response"] = result
+                        else:
+                            log(f"❌ 未找到工具: {selected_tool_name}")
+                            state["alert_response"] = f"未找到工具: {selected_tool_name}"
+                    else:
+                        log("ℹ️ 根据问题判断不需要调用告警工具")
+                        state["alert_response"] = "根据问题判断不需要调用告警工具"
+                else:
+                    state["alert_response"] = "无法解析工具选择响应"
+            except Exception as parse_err:
+                log(f"解析工具选择失败: {parse_err}")
+                state["alert_response"] = "工具选择解析失败，返回模拟数据"
+        except Exception as manual_err:
+            log(f"手动工具调用失败: {manual_err}")
+            state["alert_response"] = "告警工具调用失败"
+
     log(f"告警Agent结果【总结】: {state['alert_response'][:200]}..." if len(
         state['alert_response']) > 200 else f"告警Agent结果: {state['alert_response']}")
     return state
@@ -456,7 +534,7 @@ async def agent_chat(
         log(f"\n========== 请求开始: {query} ==========")
         log(f"知识库ID: {kb_name if kb_name else '无'}")
 
-        msg_id = add_conversation_to_db(conversation_id, "agent_chat", query, "")
+        msg_id = add_conversation_to_db(conversation_id, "chat_agent", query, "")
 
         history = []
         if conversation_id:
@@ -481,12 +559,19 @@ async def agent_chat(
             return
 
         # 流式处理
-        supervisor_state = supervisor_node(
-            {"query": query, "route": "", "time_desc": "", "start_date": "", "end_date": "", "query_year": 0,
-             "query_month": 0, "alert_response": "", "rag_response": "", "file_parse_response": "",
-             "kb_name": kb_name, "llm_response": "", "raw_data": "", "final_answer": "", "chat_history": history,
-             "conversation_id": conversation_id})
-        route = supervisor_state["route"]
+        try:
+            supervisor_state = supervisor_node(
+                {"query": query, "route": "", "time_desc": "", "start_date": "", "end_date": "", "query_year": 0,
+                 "query_month": 0, "alert_response": "", "rag_response": "", "file_parse_response": "",
+                 "kb_name": kb_name, "llm_response": "", "raw_data": "", "final_answer": "", "chat_history": history,
+                 "conversation_id": conversation_id})
+            route = supervisor_state["route"]
+        except Exception as e:
+            log(f"❌ Supervisor 节点执行失败: {e}")
+            yield OpenAIChatOutput(id=f"chat{uuid.uuid4()}", object="chat.completion",
+                                   content="抱歉，服务暂时不可用，请检查LLM模型配置和网络连接。",
+                                   role="assistant", model=Settings.model_settings.DEFAULT_LLM_MODEL).model_dump_json()
+            return
 
         if route == "alert":
             state = alert_agent(time_parse_node(supervisor_state.copy()))
@@ -496,8 +581,8 @@ async def agent_chat(
         elif route == "rag":
             state = supervisor_state.copy()
             docs = search_docs(query, Settings.kb_settings.DEFAULT_KNOWLEDGE_BASE,
-                                                                  Settings.kb_settings.VECTOR_SEARCH_TOP_K,
-                                                                  Settings.kb_settings.SCORE_THRESHOLD)
+                               Settings.kb_settings.VECTOR_SEARCH_TOP_K,
+                               Settings.kb_settings.SCORE_THRESHOLD)
             context = "\n\n".join([d["page_content"] for d in docs])
             log(f"流式RAG检索到 {len(docs)} 个文档")
             if docs:
@@ -511,7 +596,7 @@ async def agent_chat(
             loop = asyncio.get_event_loop()
             if kb_name:
                 docs = search_temp_docs(kb_name, query, Settings.kb_settings.VECTOR_SEARCH_TOP_K,
-                                                                  Settings.kb_settings.SCORE_THRESHOLD)
+                                        Settings.kb_settings.SCORE_THRESHOLD)
                 context = "\n\n".join([d["page_content"] for d in docs])
                 log(f"流式文件解析检索到 {len(docs)} 个文档")
                 if docs:
@@ -533,7 +618,7 @@ async def agent_chat(
 
         # 流式生成
         callback = AsyncIteratorCallbackHandler()
-        conv_callback = ConversationCallbackHandler(conversation_id, msg_id, "agent_chat", query)
+        conv_callback = ConversationCallbackHandler(conversation_id, msg_id, "chat_agent", query)
 
         llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=Settings.model_settings.TEMPERATURE,
                              callbacks=[callback, conv_callback], streaming=True)

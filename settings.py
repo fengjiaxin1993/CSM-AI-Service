@@ -277,58 +277,43 @@ class AlertToolParam(MyBaseModel):
     """工具参数定义"""
     name: str = ""
     """参数名称"""
-    
+
     type: str = "string"
     """参数类型：string, integer, number, boolean, array, object"""
-    
+
     description: str = ""
     """参数描述，用于LLM理解参数含义"""
-    
+
     required: bool = True
     """是否必填"""
-    
-    default: t.Any = None
-    """默认值"""
 
 
 class AlertToolConfig(MyBaseModel):
     """告警工具配置"""
     name: str = ""
     """工具名称（函数名）"""
-    
+
     description: str = ""
     """工具函数的描述文档，用于LLM理解工具用途"""
-    
+
     params: t.List[AlertToolParam] = []
     """工具输入参数列表"""
-    
-    return_schema: t.Dict[str, t.Any] = {}
-    """返回数据格式定义，用于LLM理解工具返回的数据结构"""
-    
-    return_description: str = ""
-    """返回数据描述，说明返回值的格式和内容"""
-    
+
     url: str = ""
     """HTTP POST 请求的 URL"""
-    
+
     method: t.Literal["GET", "POST"] = "POST"
     """请求方法"""
-    
+
     timeout: int = 30
     """请求超时时间（秒）"""
-    
-    headers: t.Dict[str, str] = {}
-    """请求头"""
 
 
 class AgentToolsSettings(BaseFileSettings):
     """Agent 工具配置 - 支持通过 HTTP 调用外部服务"""
-    
+
     model_config = SettingsConfigDict(yaml_file=CHATCHAT_ROOT / "agent_tools_settings.yaml")
-    
-    ALERT_API_BASE_URL: str = ""
-    """告警 API 基础 URL，如果配置则优先使用 HTTP 调用"""
-    
+
     ALERT_TOOLS: t.List[AlertToolConfig] = [
         AlertToolConfig(**{
             "name": "get_alert_overview",
@@ -337,16 +322,7 @@ class AgentToolsSettings(BaseFileSettings):
                 {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
                 {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
             ],
-            "return_schema": {
-                "时间范围": "string",
-                "告警总数": "integer",
-                "紧急告警数": "integer",
-                "重要告警数": "integer",
-                "待处置数量": "integer",
-                "已归档数量": "integer",
-            },
-            "return_description": "返回JSON格式的告警统计数据，包含时间范围、告警总数、各等级告警数量等",
-            "url": "/api/alert/overview",
+            "url": "http://127.0.0.1:7862/tools/alert/overview",
             "method": "POST",
             "timeout": 30,
             "headers": {"Content-Type": "application/json"},
@@ -358,15 +334,9 @@ class AgentToolsSettings(BaseFileSettings):
                 {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
                 {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
             ],
-            "return_schema": {
-                "时间范围": "string",
-                "每日趋势": [{"日期": "integer"}],
-            },
-            "return_description": "返回JSON格式的趋势数据，包含时间范围和每日告警数量列表",
-            "url": "/api/alert/trend",
+            "url": "http://127.0.0.1:7862/tools/alert/trend",
             "method": "POST",
             "timeout": 30,
-            "headers": {"Content-Type": "application/json"},
         }),
         AlertToolConfig(**{
             "name": "get_alert_type_dist",
@@ -375,15 +345,9 @@ class AgentToolsSettings(BaseFileSettings):
                 {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
                 {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
             ],
-            "return_schema": {
-                "时间范围": "string",
-                "告警类型统计": {"类型名称": "integer"},
-            },
-            "return_description": "返回JSON格式的告警类型分布，包含各类型的数量统计",
-            "url": "/api/alert/type-distribution",
+            "url": "http://127.0.0.1:7862/tools/alert/type-dist",
             "method": "POST",
             "timeout": 30,
-            "headers": {"Content-Type": "application/json"},
         }),
         AlertToolConfig(**{
             "name": "get_institution_ranking",
@@ -392,21 +356,12 @@ class AgentToolsSettings(BaseFileSettings):
                 {"name": "start_date", "type": "string", "description": "开始日期，格式YYYY-MM-DD", "required": True},
                 {"name": "end_date", "type": "string", "description": "结束日期，格式YYYY-MM-DD", "required": True},
             ],
-            "return_schema": {
-                "时间范围": "string",
-                "区域告警排行": [{"机构名称": "integer"}],
-            },
-            "return_description": "返回JSON格式的机构排行数据，按告警数量降序排列",
-            "url": "/api/alert/institution-ranking",
+            "url": "http://127.0.0.1:7862/tools/alert/institution-ranking",
             "method": "POST",
             "timeout": 30,
-            "headers": {"Content-Type": "application/json"},
         }),
     ]
     """告警工具列表，配置各个工具的调用信息"""
-    
-    USE_MOCK_DATA: bool = True
-    """是否使用模拟数据（当 HTTP 调用失败或配置为空时使用）"""
 
 
 class PromptSettings(BaseFileSettings):
@@ -509,46 +464,28 @@ class PromptSettings(BaseFileSettings):
 
     agent: dict = {
         "default": "{{input}}",
-        "time_parse": (
-            "你是时间类型识别器，**只输出一个英文关键词**，不要任何其他内容：\n"
-            "可选关键词：\n"
-            "today      → 今天\n"
-            "yesterday  → 昨天\n"
-            "last7d     → 近7天\n"
-            "last30d    → 近30天\n"
-            "thisMonth  → 本月\n"
-            "lastMonth  → 上月\n"
-            "thisYear   → 今年\n"
-            "unknown    → 无法识别\n"
-            "识别时间类型：{{question}}\n"
-        ),
         "alert_polish": (
-            "你是电力监控告警分析专员，处理告警统计数据。\n"
-            "要求：\n"
-            "1. 内容条理清晰，**必须分段换行**，关键信息分点；\n"
-            "2. 完整保留所有数值、时间范围、关键数据，不得删减；\n"
-            "3. 语气专业严谨，贴合电力监控运维场景；\n"
-            "4. 避免冗余废话，语句简洁；\n"
-            "5. 关键数据可用加粗强调（纯文本换行即可）；\n"
-            "6. 禁止输出JSON、代码、表格，全部转为自然段落。\n"
-        
-            "请整理并润色以下告警统计数据，排版分段展示：\n"
-            "{{question}}\n"
+            "你是电力监控告警分析专职专员，深耕电力运维、电网监控告警数据分析工作，"
+            "负责结合用户提问与原始告警上下文数据，完成专业解读、数据整理、内容润色与问题答复。\n"
+            "核心工作要求：\n"
+            "1. 精准应答：严格围绕用户提问作答，紧扣告警原始信息，针对性解决问题，不偏离主题。\n"
+            "2. 数据完整：完整保留全部数值、时间区间、设备名称、告警类型、频次、点位等关键数据，严禁篡改、遗漏、删减原始信息。\n"
+            "3. 排版规范：内容条理清晰，强制分段换行，核心内容采用分点罗列形式展示，层级分明。\n"
+            "4. 重点标注：核心指标、异常数据、告警数量、关键时段、故障点位等重要信息使用加粗突出展示。\n"
+            "5. 文风专业：贴合电力监控、电网运维工作场景，语气严谨正式、客观中立，语句精简干练，杜绝冗余话术、口语化表达。\n"
+            "6. 格式限制：仅输出纯自然文字段落，禁止生成表格、JSON、代码、特殊符号、markdown 复杂格式及无效占位内容。\n"
+            "7. 内容优化：对原始杂乱告警数据进行梳理整合、逻辑排序、语句润色，修正语序混乱问题，让数据呈现更易读、专业性更强。\n"
+            "执行规则：\n"
+            "结合用户问题：{{question}}\n"
+            "基于以下告警原始上下文数据：{{alert_context}}\n"
+            "整合梳理、规范排版、专业润色后，输出完整分析答复内容。\n"
         ),
         "supervisor": (
             "仅输出一个单词：alert / rag / llm\n"
             "1. 告警、告警统计、电厂、地调、调度、故障 → alert\n"
             "2. 电力监控、电网、电力设备、电力知识 → rag\n"
-            "3. 普通闲聊、常识、其他问题 → llm\n"      
+            "3. 普通闲聊、常识、其他问题 → llm\n"
             "问题：{{question}}\n"
-        ),
-        "file_related": (
-            "请判断以下用户提问是否需要对文档进行操作。\n"
-            "用户提问: {question}\n"
-            "请只回答 YES 或 NO:\n"
-                "- YES: 需要针对文档进行操作（总结、概括、提取、解读、分析、对比文档内容等）\n"
-                "- NO: 无文档操作需求的所有问题\n"
-            "回答:\n"
         ),
         "empty": (
             "请你回答我的问题:\n"
@@ -576,7 +513,7 @@ class SettingsContainer:
             write_file=True)
         self.agent_tools_settings.create_template_file(sub_comments={
             "ALERT_TOOLS": {"model_obj": AlertToolConfig(),
-                           "is_entire_comment": True}},
+                            "is_entire_comment": True}},
             write_file=True)
         self.prompt_settings.create_template_file(write_file=True, file_format="yaml")
 
