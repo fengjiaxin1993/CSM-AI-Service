@@ -8,12 +8,12 @@ from sse_starlette.sse import EventSourceResponse
 from langchain_classic.callbacks import AsyncIteratorCallbackHandler
 import settings
 from server.api_server.api_schemas import OpenAIChatOutput
+from server.callback_handler.message_callback_handler import MessageCallbackHandler
 from server.chat.utils import History
 from server.chat_agent.agentStatus import AgentState
 from server.chat_agent.node import supervisor_node, time_parse_node, rag_agent_node, llm_agent_node, alert_agent_node
 from server.utils import get_ChatOpenAI, get_prompt_template, wrap_done
-from server.db.repository import add_conversation_to_db, filter_conversation
-from server.callback_handler.conversation_callback_handler import ConversationCallbackHandler
+from server.db.repository import add_message_to_db, filter_message, conversation_repository
 from settings import Settings
 from utils import build_logger
 
@@ -97,62 +97,24 @@ def generate_answer_sync(state: AgentState) -> str:
         return "抱歉，生成答案时发生错误，请稍后重试。"
 
 
-async def generate_answer_stream(state: AgentState, callback: AsyncIteratorCallbackHandler) -> str:
-    """流式生成最终答案"""
-    route = state.get("route", "llm")
-    query = state["query"]
-
-    if route == "alert":
-        prompt = get_prompt_template("agent", "alert_polish")
-        alert_context = state.get("alert_context", "未获取告警数据")
-        context_vars = {"question": query, "alart_context": alert_context}
-    elif route == "rag":
-        context = state.get("rag_context", "")
-        prompt_name = "empty" if not context else "default"
-        prompt = get_prompt_template("rag", prompt_name)
-        context_vars = {"context": context, "question": query}
-    else:  # llm
-        prompt = get_prompt_template("llm_model", "default")
-        context_vars = {"input": query}
-
-    conv_callback = ConversationCallbackHandler(
-        state["conversation_id"], state["msg_id"], "chat_agent", query
-    )
-    llm = get_ChatOpenAI(
-        Settings.model_settings.DEFAULT_LLM_MODEL,
-        temperature=Settings.model_settings.TEMPERATURE,
-        callbacks=[callback, conv_callback],
-        streaming=True
-    )
-
-    chain = ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm
-    task = asyncio.create_task(wrap_done(chain.ainvoke(context_vars), callback.done))
-
-    full = ""
-    async for token in callback.aiter():
-        full += token
-
-    await task
-    return full
-
-
 # ====================== API接口 ======================
 
 
 async def agent_chat(
         query: str = Body("最近7天告警情况如何", description="用户问题"),
         stream: bool = Body(False, description="流式输出"),
-        conversation_id: str = Body("test1", description="对话框id")
+        conversation_id: str = Body("test1", description="对话框ID"),
+        user_id: str = Body("user1", description="用户ID")
 ):
     """电力告警智能体对话接口"""
 
     log(f"========== 请求开始: {query} [stream={stream}] ==========")
-    msg_id = add_conversation_to_db(conversation_id, "chat_agent", query, "")
+    msg_id = add_message_to_db(conversation_id, query, "")
 
     history = []
     if conversation_id:
         history = [{"user": r["query"], "answer": r["response"]} for r in
-                   filter_conversation(conversation_id, limit=10)]
+                   filter_message(conversation_id, limit=10, offset=0)]
         log(f"历史记录: {len(history)}条")
 
     agent = create_agent()
@@ -173,8 +135,12 @@ async def agent_chat(
         answer = generate_answer_sync(state)
         state["final_answer"] = answer
 
-        from server.db.repository import update_conversation
-        update_conversation(msg_id, answer)
+        from server.db.repository import update_response_message
+        update_response_message(msg_id, answer)
+        if not conversation_repository.conversation_exists(conversation_id=conversation_id):
+            conversation_repository.create_conversation(conversation_id=conversation_id, user_id=user_id)
+
+
         save_history(state)
 
         return OpenAIChatOutput(
@@ -219,12 +185,14 @@ async def agent_chat(
 
             # 流式生成
             callback = AsyncIteratorCallbackHandler()
-            conv_callback = ConversationCallbackHandler(conversation_id, msg_id, "chat_agent", query)
+            message_callback = MessageCallbackHandler(conversation_id=conversation_id, message_id=msg_id, user_id=user_id, query=query)
 
-            llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL, temperature=Settings.model_settings.TEMPERATURE,
-                                 callbacks=[callback, conv_callback], streaming=True)
+            llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL,
+                                 temperature=Settings.model_settings.TEMPERATURE,
+                                 callbacks=[callback, message_callback], streaming=True)
 
-            chain = ChatPromptTemplate.from_messages([History(role="user", content=prompt).to_msg_template(False)]) | llm
+            chain = ChatPromptTemplate.from_messages(
+                [History(role="user", content=prompt).to_msg_template(False)]) | llm
             task = asyncio.create_task(wrap_done(chain.ainvoke(context_vars), callback.done))
 
             full = ""

@@ -3,8 +3,6 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
-
-from server.api_server.agent_chat_routes import agent_chat_router
 from server.api_server.tickets_routes import ticket_router
 from server.api_server.warning_routes import warning_router
 from settings import Settings
@@ -13,6 +11,7 @@ from server.api_server.kb_routes import kb_router
 from server.api_server.server_routes import server_router
 from server.utils import MakeFastAPIOffline
 from server.api_server.pdf_extract_routes import pdf_extract_router
+from server.api_server.chat_manager_routes import chat_manager_router
 
 def create_app():
     app = FastAPI(title="Langchain-Chatchat API Server")
@@ -35,12 +34,12 @@ def create_app():
         return RedirectResponse(url="/docs")
 
     app.include_router(chat_router)
-    app.include_router(agent_chat_router)
     app.include_router(kb_router)
     app.include_router(server_router)
     app.include_router(warning_router)
     app.include_router(ticket_router)
     app.include_router(pdf_extract_router)
+    app.include_router(chat_manager_router)
 
     return app
 

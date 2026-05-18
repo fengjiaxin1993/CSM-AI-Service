@@ -2,18 +2,19 @@ from typing import Any, Dict, List
 
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
-from server.db.repository.conversation_repository import update_conversation
+
+from server.db.repository import update_response_message, conversation_repository
 
 
-class ConversationCallbackHandler(BaseCallbackHandler):
+class MessageCallbackHandler(BaseCallbackHandler):
     raise_error: bool = True
 
     def __init__(
-        self, conversation_id: str, message_id: str, chat_type: str, query: str
+        self, conversation_id: str, message_id: str,user_id:str, query: str
     ):
         self.conversation_id = conversation_id
         self.message_id = message_id
-        self.chat_type = chat_type
+        self.user_id = user_id
         self.query = query
         self.start_at = None
 
@@ -30,4 +31,10 @@ class ConversationCallbackHandler(BaseCallbackHandler):
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         answer = response.generations[0][0].text
-        update_conversation(self.message_id, answer)
+        update_response_message(self.message_id, answer)
+        if self.user_id:
+            if not conversation_repository.conversation_exists(conversation_id=self.conversation_id):
+                conversation_repository.create_conversation(conversation_id=self.conversation_id, user_id=self.user_id)
+
+
+

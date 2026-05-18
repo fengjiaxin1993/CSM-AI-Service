@@ -16,35 +16,23 @@ from server.user_base.faiss_user_service import FaissUserService
 from server.utils import (
     get_ChatOpenAI,
     get_prompt_template,
-    wrap_done,
-    get_default_llm,
+    wrap_done
 )
 from settings import Settings
 
 
 async def similar_mem_chat(
-        messages: List[dict] = Body(
-            [],
-            description="消息",
-            examples=[
-                [
-                    {"role": "user", "content": "介绍一下deepSeek创新点"}
-                ]
-            ],
-        ),
+        query: str = Body(..., description="用户输入", examples=["你好"]),
         user_id: str = Body("", description="用户ID"),
-        top_k: int = Body(3, description="相似的对话"),
-        score_threshold: float = Body(Settings.kb_settings.SCORE_THRESHOLD, description="语义相似度，越大越相似", ge=0.0, le=1.0),
         stream: bool = Body(False, description="流式输出"),
-        model_name: str = Body(Settings.model_settings.DEFAULT_LLM_MODEL, description="LLM 模型名称。"),
-        temperature: float = Body(Settings.model_settings.TEMPERATURE, description="LLM 采样温度", ge=0.0, le=2.0),
-        max_tokens: int = Body(Settings.model_settings.MAX_TOKENS, description="LLM最大token数配置,一定要大于0",
-                               example=4096),
 ):
-    query = messages[-1]["content"]
+    top_k = Settings.kb_settings.VECTOR_SEARCH_TOP_K
+    score_threshold = Settings.kb_settings.SCORE_THRESHOLD
+    model_name = Settings.model_settings.DEFAULT_LLM_MODEL
+    temperature = Settings.model_settings.TEMPERATURE
+    max_tokens = Settings.model_settings.MAX_TOKENS
 
     async def chat_iterator() -> AsyncIterable[str]:
-        nonlocal max_tokens
         callback = AsyncIteratorCallbackHandler()
         callbacks = [callback]
 
@@ -54,12 +42,10 @@ async def similar_mem_chat(
                                             chat_type="llm_chat",
                                             query=query)
         callbacks.append(user_callback)
-        # 判断是否传入 max_tokens 的值, 如果传入就按传入的赋值(api 调用且赋值), 如果没有传入则按照初始化配置赋值(ui 调用或 api 调用未赋值)
-        max_tokens_value = max_tokens if max_tokens is not None and max_tokens > 0 else Settings.model_settings.MAX_TOKENS
         model = get_ChatOpenAI(
             model_name=model_name,
             temperature=temperature,
-            max_tokens=max_tokens_value,
+            max_tokens=max_tokens,
             callbacks=callbacks,
         )
 
