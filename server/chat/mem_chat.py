@@ -37,7 +37,7 @@ async def mem_chat(
         # 负责保存llm response到message db
         message_id = add_message_to_db(query=query, conversation_id=conversation_id)
         message_callback = MessageCallbackHandler(conversation_id=conversation_id, message_id=message_id,
-                                                  query=query, user_id="")
+                                                  query=query)
         callbacks.append(message_callback)
         model = get_ChatOpenAI(
             model_name=model_name,

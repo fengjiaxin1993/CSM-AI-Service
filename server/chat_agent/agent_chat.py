@@ -137,9 +137,6 @@ async def agent_chat(
 
         from server.db.repository import update_response_message
         update_response_message(msg_id, answer)
-        if not conversation_repository.conversation_exists(conversation_id=conversation_id):
-            conversation_repository.create_conversation(conversation_id=conversation_id, user_id=user_id)
-
 
         save_history(state)
 
@@ -185,7 +182,7 @@ async def agent_chat(
 
             # 流式生成
             callback = AsyncIteratorCallbackHandler()
-            message_callback = MessageCallbackHandler(conversation_id=conversation_id, message_id=msg_id, user_id=user_id, query=query)
+            message_callback = MessageCallbackHandler(conversation_id=conversation_id, message_id=msg_id, query=query)
 
             llm = get_ChatOpenAI(Settings.model_settings.DEFAULT_LLM_MODEL,
                                  temperature=Settings.model_settings.TEMPERATURE,

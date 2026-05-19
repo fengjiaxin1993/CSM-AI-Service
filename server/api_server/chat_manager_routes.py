@@ -6,7 +6,7 @@ from server.chat_manager.chat_manager import (
     get_user_conversations,
     get_conversation_messages,
     delete_conversation,
-    generate_conversation_name,
+    save_conversation,
     toggle_conversation_favorite,
 )
 
@@ -15,7 +15,7 @@ logger = build_logger()
 chat_manager_router = APIRouter(prefix="/chat_manager", tags=["会话管理"])
 
 # 1. 获取可能的提问
-chat_manager_router.get(
+chat_manager_router.post(
     "/possible_questions",
     summary="获取可能的提问列表",
 )(get_possible_questions)
@@ -40,9 +40,9 @@ chat_manager_router.post(
 
 # 5. 给本次会话生成名称
 chat_manager_router.post(
-    "/conversation/generate_name",
-    summary="给本次会话生成名称",
-)(generate_conversation_name)
+    "/conversation/save_conversation",
+    summary="保存本次会话",
+)(save_conversation)
 
 # 6. 给会话增加收藏标记
 chat_manager_router.post(

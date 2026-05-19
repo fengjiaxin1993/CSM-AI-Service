@@ -38,7 +38,9 @@ _QUESTION_POOL = [
 _last_question_indices = set()
 
 
-def get_possible_questions() -> ListResponse:
+def get_possible_questions(
+        limit: int = Body(4, description="获取问题列表")
+) -> ListResponse:
     """
     获取可能的提问列表
     每次返回4个问题，和上一次不一样
@@ -46,18 +48,18 @@ def get_possible_questions() -> ListResponse:
     global _last_question_indices
 
     # 如果问题池小于4个，直接返回全部
-    if len(_QUESTION_POOL) <= 4:
+    if len(_QUESTION_POOL) <= limit:
         return ListResponse(data=_QUESTION_POOL)
 
     # 获取可选的索引（排除上一次的）
     available_indices = list(set(range(len(_QUESTION_POOL))) - _last_question_indices)
 
     # 如果可选的不够4个，重置限制
-    if len(available_indices) < 4:
+    if len(available_indices) < limit:
         available_indices = list(range(len(_QUESTION_POOL)))
 
     # 随机选择4个不重复的索引
-    selected_indices = random.sample(available_indices, 4)
+    selected_indices = random.sample(available_indices, limit)
 
     # 记录本次选择的索引
     _last_question_indices = set(selected_indices)
@@ -72,7 +74,7 @@ def get_user_conversations(
         user_id: str = Body("user", description="用户ID"),
         limit: int = Body(5, description="返回数量限制"),
         offset: int = Body(0, description="偏移量")
-) -> BaseResponse:
+) -> ListResponse:
     """
     获取用户最近的对话列表
     """
@@ -87,10 +89,10 @@ def get_user_conversations(
                 "create_time": s["create_time"],
             })
 
-        return BaseResponse(data=data)
+        return ListResponse(data=data)
     except Exception as e:
         logger.error(f"获取用户对话列表失败: {e}")
-        return BaseResponse(code=500, msg=f"获取用户对话列表失败: {str(e)}", data=[])
+        return ListResponse(code=500, msg=f"获取用户对话列表失败: {str(e)}")
 
 
 def get_conversation_messages(
@@ -129,11 +131,10 @@ def delete_conversation(conversation_id: str = Body("test", description="会话I
         return BaseResponse(code=500, msg=f"删除会话失败: {str(e)}")
 
 
-def generate_conversation_name(conversation_id: str = Body("test", description="会话ID"),
-                               user_id: str = Body("user1", description="用户ID")) -> BaseResponse:
+def save_conversation(conversation_id: str = Body("test1", description="会话ID"),
+                      user_id: str = Body("user1", description="用户ID")) -> BaseResponse:
     """
-    给本次会话生成名称
-    根据会话的第一条用户消息生成名称，如果没有消息则使用默认名称
+    保存本次会话信息
     """
     try:
         # 获取会话的消息
@@ -144,8 +145,8 @@ def generate_conversation_name(conversation_id: str = Body("test", description="
         if messages:
             first_query = messages[0].get("query", "").strip()
             if first_query:
-                # 取前20个字符作为名称
-                conversation_name = first_query[:20] + "..." if len(first_query) > 20 else first_query
+                # 取前12个字符作为名称
+                conversation_name = first_query[:12] + "..." if len(first_query) > 12 else first_query
 
         # 更新会话
         if conversation_repository.conversation_exists(conversation_id=conversation_id):
@@ -153,16 +154,10 @@ def generate_conversation_name(conversation_id: str = Body("test", description="
             if not success:
                 return BaseResponse(code=500, msg=f"更新会话: {str(conversation_id)} 失败")
             else:
-                return BaseResponse(code=200, msg=f"更新会话: {str(conversation_id)} 成功", data={
-                    "conversation_id": conversation_id,
-                    "conversation_name": conversation_name
-                })
+                return BaseResponse(code=200, msg=f"更新会话: {str(conversation_id)} 成功")
         else: # 创建会话
             conversation_repository.create_conversation(conversation_id=conversation_id, user_id=user_id, conversation_name=conversation_name)
-            return BaseResponse(code=200, msg=f"创建会话: {str(conversation_id)} 成功", data={
-                "conversation_id": conversation_id,
-                "conversation_name": conversation_name
-            })
+            return BaseResponse(code=200, msg=f"创建会话: {str(conversation_id)} 成功")
 
     except Exception as e:
         logger.error(f"生成会话名称失败: {e}")
