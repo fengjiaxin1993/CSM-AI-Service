@@ -105,7 +105,8 @@ def get_config_models(
                         "model_name": m_name,
                         "llm_base_url": m.get("llm_base_url"),
                         "embedding_base_url": m.get("embedding_base_url"),
-                        "api_key": m.get("api_key"),
+                        "llm_api_key": m.get("llm_api_key"),
+                        "embedding_api_key": m.get("embedding_api_key"),
                         "api_proxy": m.get("api_proxy"),
                     }
     return result
@@ -176,7 +177,7 @@ def get_ChatOpenAI(
     try:
         params.update(
             openai_api_base=model_info.get("llm_base_url"),
-            openai_api_key=model_info.get("api_key"),
+            openai_api_key=model_info.get("llm_api_key"),
             openai_proxy=model_info.get("api_proxy"),
         )
         if Settings.model_settings.IS_ALIYUN_PLATFORM:
@@ -204,7 +205,7 @@ def get_Embeddings(
     try:
         params.update(
             openai_api_base=model_info.get("embedding_base_url"),
-            openai_api_key=model_info.get("api_key"),
+            openai_api_key=model_info.get("embedding_api_key"),
             openai_proxy=model_info.get("api_proxy"),
         )
         if model_info.get("platform_type") == "openai":

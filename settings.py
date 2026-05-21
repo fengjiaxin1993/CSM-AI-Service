@@ -196,7 +196,10 @@ class PlatformConfig(MyBaseModel):
     embedding_base_url: str = "http://127.0.0.1:11434/v1"
     """openai api url"""
 
-    api_key: str = "EMPTY"
+    llm_api_key: str = "EMPTY"
+    """api key if available"""
+
+    embedding_api_key: str = "EMPTY"
     """api key if available"""
 
     llm_models: t.Union[t.Literal["auto"], t.List[str]] = []
@@ -246,7 +249,8 @@ class ApiModelSettings(BaseFileSettings):
             "platform_type": "ollama",
             "llm_base_url": "http://192.168.88.1:11434/v1",
             "embedding_base_url": "http://192.168.88.1:11434/v1",
-            "api_key": "EMPTY",
+            "llm_api_key": "EMPTY",
+            "embedding_api_key": "EMPTY",
             "llm_models": [
                 "qwen2.5:0.5b",
             ],
@@ -259,7 +263,8 @@ class ApiModelSettings(BaseFileSettings):
             "platform_type": "openai",
             "llm_base_url": "https://api.openai.com/v1",
             "embedding_base_url": "https://api.openai.com/v1",
-            "api_key": "sk-proj-",
+            "llm_api_key": "EMPTY",
+            "embedding_api_key": "EMPTY",
             "llm_models": [
                 "gpt-4o",
                 "gpt-3.5-turbo",
