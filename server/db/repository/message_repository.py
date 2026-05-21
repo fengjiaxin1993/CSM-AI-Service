@@ -1,4 +1,5 @@
 import uuid
+from typing import Dict
 
 from server.db.models.message_model import MessageModel
 from server.db.session import with_session
@@ -13,6 +14,7 @@ def add_message_to_db(
         query,
         response="",
         message_id=None,
+        metadata: Dict = {},
 ):
     """
     新增聊天记录
@@ -24,6 +26,7 @@ def add_message_to_db(
         query=query,
         response=response,
         conversation_id=conversation_id,
+        meta_data=metadata,
     )
     session.add(m)
     session.commit()
@@ -75,6 +78,8 @@ def filter_message(session, conversation_id: str, limit: int = 10, offset: int =
             "id": m.id,
             "query": m.query,
             "response": m.response,
-            "create_time": m.create_time.strftime("%Y-%m-%d %H:%M:%S") if m.create_time else None
+            "create_time": m.create_time.strftime("%Y-%m-%d %H:%M:%S") if m.create_time else None,
+            "file_id": m.meta_data.get("file_id", ""),
+            "file_names": m.meta_data.get("file_names", [])
         })
     return data

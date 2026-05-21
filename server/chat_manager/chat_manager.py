@@ -92,7 +92,7 @@ def get_user_conversations(
         return ListResponse(data=data)
     except Exception as e:
         logger.error(f"获取用户对话列表失败: {e}")
-        return ListResponse(code=500, msg=f"获取用户对话列表失败: {str(e)}")
+        return ListResponse(code=500, msg=f"获取用户对话列表失败: {str(e)}", data=[])
 
 
 def get_conversation_messages(
@@ -106,14 +106,14 @@ def get_conversation_messages(
     try:
         # 检查会话是否存在
         if not conversation_repository.conversation_exists(conversation_id):
-            return ListResponse(code=201, msg=f"会话不存在")
+            return ListResponse(code=201, msg=f"会话不存在",data=[])
 
         messages = message_repository.filter_message(conversation_id, limit=limit, offset=offset, asc=False)
 
         return ListResponse(data=messages)
     except Exception as e:
         logger.error(f"获取会话消息失败: {e}")
-        return ListResponse(code=500, msg=f"获取会话消息失败: {str(e)}")
+        return ListResponse(code=500, msg=f"获取会话消息失败: {str(e)}",data=[])
 
 
 def delete_conversation(conversation_id: str = Body("test", description="会话ID")) -> BaseResponse:

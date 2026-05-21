@@ -103,8 +103,7 @@ def generate_answer_sync(state: AgentState) -> str:
 async def agent_chat(
         query: str = Body("最近7天告警情况如何", description="用户问题"),
         stream: bool = Body(False, description="流式输出"),
-        conversation_id: str = Body("test1", description="对话框ID"),
-        user_id: str = Body("user1", description="用户ID")
+        conversation_id: str = Body("test1", description="对话框ID")
 ):
     """电力告警智能体对话接口"""
 

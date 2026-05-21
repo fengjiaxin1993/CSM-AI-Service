@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List
 
 from fastapi import APIRouter
-from server.chat.kb_chat import upload_temp_docs
+from server.chat.file_chat import upload_temp_docs
 from server.knowledge_base.kb_api import create_kb, delete_kb, list_kbs
 from server.knowledge_base.kb_doc_api import (
     delete_docs,

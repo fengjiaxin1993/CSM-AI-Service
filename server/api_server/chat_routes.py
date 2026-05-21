@@ -5,6 +5,7 @@ from server.chat.chat import chat
 from server.chat.kb_chat import kb_chat
 from settings import Settings
 from utils import build_logger
+from ..chat.file_chat import file_chat
 from ..chat.mem_chat import mem_chat
 from ..chat_agent.agent_chat import agent_chat
 
@@ -45,23 +46,22 @@ async def unified_chat(
         query: str = Body("最近7天告警情况如何", description="用户问题"),
         stream: bool = Body(False, description="流式输出"),
         conversation_id: str = Body("test1", description="对话框ID"),
-        user_id: str = Body("user1", description="用户ID"),
-        # KB 相关参数
-        kb_name: str = Body("", description="临时知识库ID"),
+        # file_id 相关参数
+        file_id: str = Body("", description="临时知识库ID"),
 
 ):
     """
     统一对话接口
     """
     # 判断使用哪种模式
-    if kb_name:
+    if file_id:
         logger.info(f"[unified_chat] 使用临时对话模式")
         # 调用 kb_chat
-        return await kb_chat(
+        return await file_chat(
             query=query,
-            mode="temp_kb",
-            kb_name=kb_name,
-            return_direct=False,
+            file_id=file_id,
+            stream=stream,
+            conversation_id=conversation_id
         )
     else:
         # 智能体对话模式
@@ -71,7 +71,6 @@ async def unified_chat(
             query=query,
             stream=stream,
             conversation_id=conversation_id,
-            user_id=user_id,
         )
 
 
