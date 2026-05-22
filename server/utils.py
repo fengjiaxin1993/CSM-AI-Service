@@ -645,7 +645,7 @@ def get_server_configs() -> Dict:
     return {**{k: v for k, v in locals().items() if k[0] != "_"}, **_custom}
 
 
-def get_temp_dir(id: str = None) -> Tuple[str, str]:
+def get_temp_dir() -> Tuple[str, str]:
     """
     创建一个临时目录，返回（路径，文件夹名称）
     """
@@ -653,15 +653,10 @@ def get_temp_dir(id: str = None) -> Tuple[str, str]:
 
     from settings import Settings
 
-    if id:  # 如果指定的临时目录已存在，直接返回
-        path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, id)
-        if os.path.isdir(path):
-            return path, id
-
-    id = uuid.uuid4().hex
-    path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, id)
+    file_id = uuid.uuid4().hex
+    path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, file_id)
     os.mkdir(path)
-    return path, id
+    return path, file_id
 
 
 def is_port_in_use(port):

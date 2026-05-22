@@ -74,7 +74,6 @@ def _parse_files_in_thread(
 
 def upload_temp_docs(
         files: List[UploadFile] = File(..., description="上传文件，支持多文件"),
-        prev_id: str = Form(None, description="前知识库ID"),
         chunk_size: int = Form(Settings.kb_settings.CHUNK_SIZE, description="知识库中单段文本最大长度"),
         chunk_overlap: int = Form(Settings.kb_settings.OVERLAP_SIZE, description="知识库中相邻文本重合长度"),
         zh_title_enhance: bool = Form(Settings.kb_settings.ZH_TITLE_ENHANCE, description="是否开启中文标题加强"),
@@ -83,12 +82,9 @@ def upload_temp_docs(
     将文件保存到临时目录，并进行向量化。
     返回临时目录名称作为ID，同时也是临时向量库的ID。
     """
-    if not prev_id:
-        memo_faiss_pool.pop(prev_id)
-
     failed_files = []
     documents = []
-    path, id = get_temp_dir(prev_id)
+    path, file_id = get_temp_dir()
     for success, file, msg, docs in _parse_files_in_thread(
             files=files,
             dir=path,
@@ -101,12 +97,12 @@ def upload_temp_docs(
         else:
             failed_files.append({file: msg})
     try:
-        with memo_faiss_pool.load_vector_store(kb_name=id).acquire() as vs:
+        with memo_faiss_pool.load_vector_store(kb_name=file_id).acquire() as vs:
             vs.add_documents(documents)
     except Exception as e:
         logger.error(f"Failed to add documents to faiss: {e}")
 
-    return BaseResponse(data={"file_id": id, "failed_files": failed_files})
+    return BaseResponse(data={"file_id": file_id, "failed_files": failed_files})
 
 
 async def file_chat(query: str = Body(..., description="用户输入", examples=["你好"]),

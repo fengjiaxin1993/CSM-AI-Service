@@ -12,10 +12,10 @@ from settings import Settings
 from server.api_server.api_schemas import OpenAIChatOutput
 from server.chat.utils import History
 from server.knowledge_base.kb_service.base import KBServiceFactory
-from server.knowledge_base.kb_doc_api import search_docs, search_temp_docs
-from server.knowledge_base.utils import format_reference, KnowledgeFile
-from server.utils import (wrap_done, get_ChatOpenAI, get_default_llm,
-                          BaseResponse, get_prompt_template, run_in_thread_pool, get_temp_dir)
+from server.knowledge_base.kb_doc_api import search_docs
+from server.knowledge_base.utils import format_reference
+from server.utils import (wrap_done, get_ChatOpenAI,
+                          BaseResponse, get_prompt_template,)
 
 from server.utils import build_logger
 

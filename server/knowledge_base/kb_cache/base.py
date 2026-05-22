@@ -3,7 +3,6 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from typing import Any, List, Tuple, Union, Generator
 
-from langchain.embeddings.base import Embeddings
 from langchain_community.vectorstores import FAISS
 
 from utils import build_logger
@@ -87,7 +86,10 @@ class CachePool:
 
     def pop(self, key: str = None) -> ThreadSafeObject:
         if key is None:
-            return self._cache.popitem(last=False)
+            if len(self._cache) > 0:
+                return self._cache.popitem(last=False)
+            else:
+                return None
         else:
             return self._cache.pop(key, None)
 
