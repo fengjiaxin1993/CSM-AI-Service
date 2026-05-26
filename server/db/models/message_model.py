@@ -1,6 +1,10 @@
-from sqlalchemy import JSON, Column, DateTime, Integer, String, func
+from datetime import datetime
+
+import pytz
+from sqlalchemy import JSON, Column, DateTime, Integer, String
 
 from server.db.base import Base
+from server.db.models.base import get_shanghai_time
 
 
 class MessageModel(Base):
@@ -15,7 +19,7 @@ class MessageModel(Base):
     response = Column(String(4096), comment="模型回答")
     # 记录知识库id等，以便后续扩展
     meta_data = Column(JSON, default={})
-    create_time = Column(DateTime, default=func.now(), comment="创建时间")
+    create_time = Column(DateTime, default=get_shanghai_time(), comment="创建时间")
 
     def __repr__(self):
         return f"<message(id='{self.id}',conversation_id='{self.conversation_id}', query='{self.query}', response='{self.response}', create_time='{self.create_time}')>"
