@@ -2,11 +2,12 @@ from datetime import datetime
 
 import pytz
 from sqlalchemy import Column, DateTime, Integer, String
+from zoneinfo import ZoneInfo
 
 
 def get_shanghai_time():
     """获取上海时区的当前时间"""
-    return datetime.now(pytz.timezone('Asia/Shanghai'))
+    return datetime.now(ZoneInfo("Asia/Shanghai"))
 
 
 class BaseModel:

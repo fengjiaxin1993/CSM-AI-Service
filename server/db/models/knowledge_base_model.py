@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, Integer, String, func
 
 from server.db.base import Base
+from server.db.models.base import get_shanghai_time
 
 
 class KnowledgeBaseModel(Base):
@@ -19,7 +20,7 @@ class KnowledgeBaseModel(Base):
     vs_type = Column(String(50), comment="向量库类型")
     embed_model = Column(String(50), comment="嵌入模型名称")
     file_count = Column(Integer, default=0, comment="文件数量")
-    create_time = Column(DateTime, default=func.now(), comment="创建时间")
+    create_time = Column(DateTime, default=get_shanghai_time(), comment="创建时间")
 
     def __repr__(self):
         return f"<KnowledgeBase(id='{self.id}', kb_name='{self.kb_name}',kb_intro='{self.kb_info} vs_type='{self.vs_type}', embed_model='{self.embed_model}', file_count='{self.file_count}', create_time='{self.create_time}')>"

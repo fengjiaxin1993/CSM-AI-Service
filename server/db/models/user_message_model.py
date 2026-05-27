@@ -1,6 +1,7 @@
 from sqlalchemy import JSON, Column, DateTime, Integer, String, func
 
 from server.db.base import Base
+from server.db.models.base import get_shanghai_time
 
 
 class UserMessageModel(Base):
@@ -14,7 +15,7 @@ class UserMessageModel(Base):
     chat_type = Column(String(50), comment="聊天类型")
     query = Column(String(4096), comment="用户问题")
     response = Column(String(4096), comment="模型回答")
-    create_time = Column(DateTime, default=func.now(), comment="创建时间")
+    create_time = Column(DateTime, default=get_shanghai_time(), comment="创建时间")
 
     def __repr__(self):
         return f"<message(id='{self.id}', user_id='{self.user_id}', chat_type='{self.chat_type}', query='{self.query}', response='{self.response}', create_time='{self.create_time}')>"
