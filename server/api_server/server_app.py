@@ -3,6 +3,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
+
+from server.api_server.platform_warning_routes import platform_warning_router
 from server.api_server.tickets_routes import ticket_router
 from server.api_server.warning_routes import warning_router
 from settings import Settings
@@ -40,6 +42,8 @@ def create_app():
     app.include_router(ticket_router)
     app.include_router(pdf_extract_router)
     app.include_router(chat_manager_router)
+    app.include_router(platform_warning_router)
+
 
     return app
 

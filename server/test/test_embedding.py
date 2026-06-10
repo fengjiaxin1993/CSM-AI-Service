@@ -48,48 +48,5 @@ def test2():
     print(completion.model_dump_json())
 
 
-class DoubaoOpenAIEmbeddings(Embeddings):
-
-    def __init__(
-            self,
-            model: str,
-            openai_api_base: str,
-            openai_api_key: str,
-            timeout: float = 60,
-            batch_size=128):
-        self._client = OpenAI(
-            api_key=openai_api_key,
-            base_url=openai_api_base,
-            timeout=timeout,
-        )
-
-        self.model = model
-        self.batch_size = batch_size
-
-    def embed_query(self, text: str) -> List[float]:
-        print(f"embed_query: {text}")
-
-        return self.embed_documents([text])[0]
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        # return super().embed_documents(texts)
-        vecs: List[List[float]] = []
-        bs = self.batch_size
-        for i in range(0, len(texts), bs):
-            batch = texts[i:i + bs]
-        resp = self._client.embeddings.create(model=self.model, input=batch)
-        vecs.extend([d.embedding for d in resp.data])
-        return vecs
-
-
-def test3():
-    embeddings = DoubaoOpenAIEmbeddings(
-        model="text-embedding-v4",
-        openai_api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        openai_api_key="sk-445d4654ee8e4067b447172154f0a273",
-    )
-    print(embeddings.embed_query("你好"))
-
-
 if __name__ == "__main__":
     test1()

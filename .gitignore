@@ -1,0 +1,16 @@
+**/__pycache__
+**/data/logs/
+**/.idea/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+data/
+init_data/
+docs/
+models/
+tests/
+*.yaml
+*.ali
+*.ollama
+dist/
