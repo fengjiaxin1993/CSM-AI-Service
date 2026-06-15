@@ -6,7 +6,6 @@ __pycache__/
 *$py.class
 *.so
 src/csm_ai_service/data/
-src/csm_ai_service/test_api/
 init_data/
 *.yaml
 dist/
