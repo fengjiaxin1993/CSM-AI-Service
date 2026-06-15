@@ -9,3 +9,4 @@ src/csm_ai_service/data/
 init_data/
 *.yaml
 dist/
+env/

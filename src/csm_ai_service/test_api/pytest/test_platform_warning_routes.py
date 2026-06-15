@@ -1,4 +1,5 @@
 """测试 /warning_handle 接口"""
+import json
 import httpx
 import pytest
 
@@ -38,3 +39,4 @@ async def test_platform_warning():
         })
     assert r.status_code == 200
     assert r.json()["code"] == "0"
+    print(f"[platform_warning] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")

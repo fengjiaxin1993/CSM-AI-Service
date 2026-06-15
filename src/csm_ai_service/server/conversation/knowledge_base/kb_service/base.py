@@ -367,7 +367,7 @@ class KBServiceFactory:
             "kb_info": kb_info,
         }
 
-        from server.conversation.knowledge_base.kb_service.faiss_kb_service import (
+        from csm_ai_service.server.conversation.knowledge_base.kb_service.faiss_kb_service import (
             FaissKBService,
         )
         return FaissKBService(**params)

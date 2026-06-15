@@ -53,19 +53,19 @@ kb_router.post(
     "/delete_docs", response_model=BaseResponse, summary="删除知识库内指定文件"
 )(delete_docs)
 
-kb_router.post("/update_info", response_model=BaseResponse, summary="更新知识库介绍")(
-    update_info
-)
+# kb_router.post("/update_info", response_model=BaseResponse, summary="更新知识库介绍")(
+#     update_info
+# )
 
-kb_router.post(
-    "/update_docs", response_model=BaseResponse, summary="更新现有文件到知识库"
-)(update_docs)
+# kb_router.post(
+#     "/update_docs", response_model=BaseResponse, summary="更新现有文件到知识库"
+# )(update_docs)
 
 # kb_router.get("/download_doc", summary="下载对应的知识文件")(download_doc)
 
-kb_router.post(
-    "/recreate_vector_store", summary="根据content中文档重建向量库，流式输出处理进度。"
-)(recreate_vector_store)
+# kb_router.post(
+#     "/recreate_vector_store", summary="根据content中文档重建向量库，流式输出处理进度。"
+# )(recreate_vector_store)
 
 kb_router.post("/upload_temp_docs", summary="上传文件到临时目录，用于文件对话。")(
     upload_temp_docs

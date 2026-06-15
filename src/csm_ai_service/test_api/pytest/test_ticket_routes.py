@@ -1,4 +1,5 @@
 """测试 /ticket 接口"""
+import json
 import httpx
 import pytest
 
@@ -16,6 +17,7 @@ async def test_associate_device():
         })
     assert r.status_code == 200
     assert r.json()["code"] == 200
+    print(f"[associate_device] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
 
 
 @pytest.mark.asyncio
@@ -28,3 +30,4 @@ async def test_associate_device_not_substation():
             "is_substation": False
         })
     assert r.status_code == 200
+    print(f"[associate_device_not_substation] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")

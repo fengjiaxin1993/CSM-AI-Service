@@ -5,12 +5,12 @@ from typing import Dict, List, Tuple
 from langchain_core.documents import Document
 
 from csm_ai_service.settings import Settings
-from server.conversation.knowledge_base.kb_cache.faiss_cache import (
+from csm_ai_service.server.conversation.knowledge_base.kb_cache.faiss_cache import (
     ThreadSafeFaiss,
     kb_faiss_pool,
 )
-from server.conversation.knowledge_base.kb_service.base import KBService, SupportedVSType
-from server.conversation.knowledge_base.utils import KnowledgeFile, get_kb_path, get_vs_path
+from csm_ai_service.server.conversation.knowledge_base.kb_service.base import KBService, SupportedVSType
+from csm_ai_service.server.conversation.knowledge_base.utils import KnowledgeFile, get_kb_path, get_vs_path
 
 
 class FaissKBService(KBService):

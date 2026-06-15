@@ -373,7 +373,6 @@ class PromptSettings(BaseFileSettings):
     """Prompt 模板.使用 jinja2 格式"""
 
     model_config = SettingsConfigDict(yaml_file=CHATCHAT_ROOT / "prompt_settings.yaml",
-                                      json_file=CHATCHAT_ROOT / "prompt_settings.json",
                                       extra="allow")
 
     llm_model: dict = {

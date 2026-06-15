@@ -1,4 +1,5 @@
 """测试 /parse_pdf 接口"""
+import json
 import os
 
 import httpx
@@ -17,6 +18,7 @@ async def test_extract_safe_table():
             files = {"file": (PDF_NAME, f, "application/pdf")}
             r = await c.post("/parse_pdf/extract_safe_table", files=files)
     assert r.status_code == 200
+    print(f"[extract_safe_table] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
 
 
 @pytest.mark.asyncio
@@ -27,6 +29,7 @@ async def test_extract_dbcp_info():
             files = {"file": (PDF_NAME, f, "application/pdf")}
             r = await c.post("/parse_pdf/extract_dbcp_info", files=files)
     assert r.status_code == 200
+    print(f"[extract_dbcp_info] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
 
 
 @pytest.mark.asyncio
@@ -37,3 +40,4 @@ async def test_extract_safe_split_table():
             files = {"file": (PDF_NAME, f, "application/pdf")}
             r = await c.post("/parse_pdf/extract_safe_split_table", files=files)
     assert r.status_code == 200
+    print(f"[extract_safe_split_table] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")

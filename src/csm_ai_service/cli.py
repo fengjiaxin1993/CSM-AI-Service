@@ -1,4 +1,7 @@
+import shutil
 import warnings
+from pathlib import Path
+
 # 屏蔽 pydantic 模块下所有 UserWarning
 warnings.filterwarnings("ignore", category=UserWarning, module=r"pydantic.*")
 import click
@@ -23,7 +26,17 @@ def init():
     bs = Settings.basic_settings
     logger.info(f"开始初始化项目数据目录：{Settings.CHATCHAT_ROOT}")
     Settings.basic_settings.make_dirs()
-    logger.info("创建所有数据目录：成功。")
+    logger.success("创建所有数据目录：成功。")
+    if (bs.PACKAGE_ROOT / "data/knowledge_base/samples" != Path(bs.KB_ROOT_PATH) / "samples"):
+        shutil.copytree(bs.PACKAGE_ROOT / "data/knowledge_base/samples/content", Path(bs.KB_ROOT_PATH) / "samples/content",
+                        dirs_exist_ok=True)
+        shutil.copytree(bs.PACKAGE_ROOT / "data/nltk_data",
+                        Path(bs.DATA_PATH) / "nltk_data",
+                        dirs_exist_ok=True)
+        shutil.copytree(bs.PACKAGE_ROOT / "data/template_file",
+                        Path(bs.DATA_PATH) / "template_file",
+                        dirs_exist_ok=True)
+    logger.success("复制 samples 知识库文件：成功。")
     logger.info("开始创建相关表信息")
     create_tables()
     logger.info("创建表信息：成功。")

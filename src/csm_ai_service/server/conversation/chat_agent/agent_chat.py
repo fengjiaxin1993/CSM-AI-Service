@@ -15,7 +15,7 @@ from csm_ai_service.server.utils import get_ChatOpenAI, get_prompt_template, wra
 from csm_ai_service.server.db.repository import add_message_to_db, filter_message
 from csm_ai_service.settings import Settings
 from csm_ai_service.utils import build_logger
-
+from csm_ai_service.server.db.repository import update_response_message
 logger = build_logger()
 
 
@@ -133,7 +133,7 @@ async def agent_chat(
         answer = generate_answer_sync(state)
         state["final_answer"] = answer
 
-        from server.db.repository import update_response_message
+
         update_response_message(msg_id, answer)
 
         save_history(state)

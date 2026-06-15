@@ -1,4 +1,5 @@
 """测试 /warning 接口"""
+import json
 import os
 import httpx
 import pytest
@@ -9,6 +10,7 @@ DOCX_PATH = os.path.join(os.path.dirname(__file__), DOCX_NAME)
 
 
 @pytest.mark.asyncio
+@pytest.mark.order(1)
 async def test_warning_analyze():
     assert os.path.exists(DOCX_PATH), f"测试文件不存在: {DOCX_PATH}"
     async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
@@ -17,6 +19,31 @@ async def test_warning_analyze():
             data = {"warning_number": "warning_001"}
             r = await c.post("/warning/analyze", files=files, data=data)
     assert r.status_code == 200
+    print(f"[warning_analyze] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.order(2)
+async def test_save_warning_report():
+    assert os.path.exists(DOCX_PATH), f"测试文件不存在: {DOCX_PATH}"
+    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+        with open(DOCX_PATH, "rb") as f:
+            files = {"file": (DOCX_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+            data = {"warning_number": "warning_save_001"}
+            r = await c.post("/warning/save_warning_report", files=files, data=data)
+    assert r.status_code == 200
+    print(f"[save_warning_report] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.order(3)
+async def test_delete_warning_report():
+    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+        r = await c.post("/warning/delete_warning_report", json="warning_save_001")
+    assert r.status_code == 200
+    print(f"[delete_warning_report] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
+
 
 
 @pytest.mark.asyncio
@@ -41,21 +68,13 @@ async def test_generate_notice_doc():
             "cur_date": "2026年02月01日"
         })
     assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_save_warning_report():
-    assert os.path.exists(DOCX_PATH), f"测试文件不存在: {DOCX_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
-        with open(DOCX_PATH, "rb") as f:
-            files = {"file": (DOCX_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
-            data = {"warning_number": "warning_save_001"}
-            r = await c.post("/warning/save_warning_report", files=files, data=data)
-    assert r.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_delete_warning_report():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
-        r = await c.post("/warning/delete_warning_report", json="warning_save_001")
-    assert r.status_code == 200
+    content_type = r.headers.get("content-type", "")
+    if "application/json" in content_type:
+        resp = r.json()
+        print(f"[generate_notice_doc] 响应: {json.dumps(resp, ensure_ascii=False, indent=2)}")
+    else:
+        # 返回的是文件流（docx），保存到本地验证
+        save_path = os.path.join(os.path.dirname(__file__), "test_notice_output.docx")
+        with open(save_path, "wb") as f:
+            f.write(r.content)
+        print(f"[generate_notice_doc] 响应为文件，已保存到: {save_path}，大小: {len(r.content)} bytes")

@@ -17,7 +17,7 @@ from csm_ai_service.server.utils import (
     wrap_done
 )
 from csm_ai_service.settings import Settings
-from server.db.repository import add_user_message_to_db
+from csm_ai_service.server.db.repository import add_user_message_to_db
 
 
 async def similar_mem_chat(

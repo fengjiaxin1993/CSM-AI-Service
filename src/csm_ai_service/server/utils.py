@@ -24,7 +24,6 @@ from fastapi import FastAPI
 from langchain_core.embeddings import Embeddings
 from langchain_openai.chat_models import ChatOpenAI
 from pydantic import BaseModel, Field
-
 from csm_ai_service.settings import Settings
 from csm_ai_service.utils import build_logger
 
@@ -651,7 +650,7 @@ def get_temp_dir() -> Tuple[str, str]:
     """
     import uuid
 
-    from settings import Settings
+
 
     file_id = uuid.uuid4().hex
     path = os.path.join(Settings.basic_settings.BASE_TEMP_DIR, file_id)
