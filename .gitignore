@@ -5,12 +5,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-data/
+src/csm_ai_service/data/
+src/csm_ai_service/test_api/
 init_data/
-docs/
-models/
-tests/
 *.yaml
-*.ali
-*.ollama
 dist/

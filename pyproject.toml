@@ -1,13 +1,10 @@
 [tool.poetry]
 name = "icdo"
-version = "1.1.3"
+version = "1.2.0"
 description = "ICDO智能问答助手服务"
 authors = ["feng jiaxin"]
 readme = "README.md"
-packages = [
-    {include = "server"},
-    {include = "*.py"}
-]
+packages = [{include = "csm_ai_service", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -49,7 +46,7 @@ black = "^24.0.0"
 flake8 = "^7.0.0"
 
 [tool.poetry.scripts]
-icdo = "cli:main"
+icdo = "csm_ai_service.cli:main"
 
 [build-system]
 requires = ["poetry-core"]
