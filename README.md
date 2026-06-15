@@ -468,31 +468,57 @@ pytest test_chat_routes.py::test_kb_chat -s -v
 
 ---
 
-## 部署说明
-
-### pip 部署
+## 1.开发说明
+### 1.1 源码启动
 
 ```bash
-pip install -r requirements.txt
-python -m csm_ai_service.cli init
-python -m csm_ai_service.cli kb -r
-python -m csm_ai_service.cli start
+cd CSM-AI-Service
+cd src/csm_ai_service
+python cli.py init
+python cli.py kb -r
+python cli.py start
 ```
 
-### conda 部署（推荐国产系统）
-
-> 凝思/麒麟系统 GCC 版本较低，pip 编译容易失败。conda 直接下载预编译二进制，无需系统编译环境。
+### 1.2 pip可编辑安装（不依赖poetry）启动
 
 ```bash
-conda env create -f conda-environment.yml
-conda activate chatchat
-python -m csm_ai_service.cli init
-python -m csm_ai_service.cli start
+# 可编辑模式安装项目（代码修改实时生效）
+pip install -e .
+# 安装后同样可以直接使用 CLI 命令：
+# 初始化
+icdo init
+# 生成向量库
+icdo kb -r
+# 启动服务
+icdo start
 ```
 
-### Docker 部署
+## 2.构建wheel包说明(通过poetry)
 
 ```bash
-docker build -t csm-ai-service .
-docker run -p 7861:7861 -v ./data:/app/data csm-ai-service
+cd CSM-AI-Service
+poetry build
+# 安装包在dist目录下
+```
+
+## 3. conda 部署
+
+```bash
+conda create -n ICDO-RNV python=3.11
+conda activate ICDO-RNV
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
+or
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+
+# 安装icdo
+pip install dist/icdo-1.2.0.tar.gz
+```
+## 4. 启动项目
+```bash
+# 初始化
+icdo init
+# 生成向量库
+icdo kb -r
+# 启动服务
+icdo start
 ```
