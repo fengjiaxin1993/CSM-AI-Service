@@ -6,7 +6,7 @@ import pytest
 
 BASE = "http://127.0.0.1:7861"
 PDF_NAME = "《电力监控系统安全防护规定》27号令.pdf"
-PDF_PATH = os.path.join(os.path.dirname(__file__), PDF_NAME)
+PDF_PATH = os.path.join(os.path.dirname(__file__), "data", PDF_NAME)
 
 
 

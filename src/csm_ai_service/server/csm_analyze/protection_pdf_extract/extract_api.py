@@ -29,7 +29,7 @@ def extract_table(
 # 将提取的表格修改后，逐项提出，将关联资产划分
 def split_table(
         table_list: list[list[str]],
-        split_char_list: list = list['、', '，'],
+        split_char_list: list = ['、', '，'],
         key: str = '关联资产') -> list[list[str]]:
     header_list = table_list[0]
     data_list = table_list[1:]

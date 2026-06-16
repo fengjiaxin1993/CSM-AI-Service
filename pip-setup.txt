@@ -27,3 +27,4 @@ pip install openpyxl pandas
 pip install msoffcrypto
 pip install pytest
 pip install pytest-asyncio
+pip install pytest-order

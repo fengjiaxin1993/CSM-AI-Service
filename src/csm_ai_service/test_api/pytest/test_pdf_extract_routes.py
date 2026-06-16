@@ -7,7 +7,7 @@ import pytest
 
 BASE = "http://127.0.0.1:7861"
 PDF_NAME = "2018泉州供电公司调度自动化系统信息安全等级测评报告-S2A3G3.pdf"
-PDF_PATH = os.path.join(os.path.dirname(__file__), PDF_NAME)
+PDF_PATH = os.path.join(os.path.dirname(__file__),"data", PDF_NAME)
 
 
 @pytest.mark.asyncio

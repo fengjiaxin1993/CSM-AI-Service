@@ -20,12 +20,7 @@ logger = build_logger()
 
 
 def log(msg: str):
-    """全局日志打印"""
-    try:
-        if getattr(Settings.BasicSettings, "PRINT_AGENT", True):
-            logger.info(f"\n[🔎 运行日志] {msg}")
-    except:
-        logger.info(f"\n[🔎 运行日志] {msg}")
+    logger.info(f"\n[🔎 运行日志] {msg}")
 
 
 def save_history(state: AgentState) -> AgentState:

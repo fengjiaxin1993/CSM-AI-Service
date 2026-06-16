@@ -105,11 +105,10 @@ class BasicSettings(BaseFileSettings):
     OPEN_CROSS_DOMAIN: bool = True
     """API 是否开启跨域"""
 
-    DEBUG: bool = True
-    """doc的 api 是否web页面可以查看"""
 
-    PRINT_AGENT: bool = True
-    """打印agent执行的中间状态"""
+    SHOW_PAGES: bool = False
+    """是否允许访问前端页面，关闭后所有页面均不可在页面显示"""
+
 
     MAX_CONCURRENT_AUDIT_LLM: int = 2
     """审计最多同时启用LLM数"""

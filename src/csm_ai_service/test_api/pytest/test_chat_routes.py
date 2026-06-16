@@ -1,10 +1,13 @@
 """测试 /chat 接口"""
 import json
+import os
+
 import httpx
 import pytest
 
 BASE = "http://127.0.0.1:7861"
-
+PDF_NAME = "《电力监控系统安全防护规定》27号令.pdf"
+PDF_PATH = os.path.join(os.path.dirname(__file__), "data", PDF_NAME)
 
 @pytest.mark.asyncio
 async def test_chat():
@@ -98,9 +101,8 @@ async def test_unified_chat_with_file():
     import os
     async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
         # 上传当前目录下的真实 PDF 文件
-        pdf_path = os.path.join(os.path.dirname(__file__), "《电力监控系统安全防护规定》27号令.pdf")
-        assert os.path.exists(pdf_path), f"测试文件不存在: {pdf_path}"
-        with open(pdf_path, "rb") as f:
+        assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
+        with open(PDF_PATH, "rb") as f:
             upload_r = await c.post(
                 "/knowledge_base/upload_temp_docs",
                 files={"files": ("《电力监控系统安全防护规定》27号令.pdf", f, "application/pdf")},

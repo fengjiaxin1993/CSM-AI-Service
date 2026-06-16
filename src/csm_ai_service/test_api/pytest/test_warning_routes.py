@@ -6,7 +6,7 @@ import pytest
 
 BASE = "http://127.0.0.1:7861"
 DOCX_NAME = "关于110kVXX变告警说明.docx"
-DOCX_PATH = os.path.join(os.path.dirname(__file__), DOCX_NAME)
+DOCX_PATH = os.path.join(os.path.dirname(__file__),"data", DOCX_NAME)
 
 
 @pytest.mark.asyncio

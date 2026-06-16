@@ -44,18 +44,25 @@ def get_device_types(maintenance_object: str, affected_object: str, work_content
 
     device_types = []
 
-    if is_substation:  # 厂站
-        if DEVICE_TYPE_MAP["1305"] in all_content:
-            device_types.append("1305")
-        if DEVICE_TYPE_MAP["1302"] in all_content:
-            device_types.append("1302")
-        if len(device_types) == 0:
-            device_types.append("1305")
-            device_types.append("1302")
-    else:  # 主站
-        for k, v in DEVICE_TYPE_MAP.items():
-            if v in all_content:
-                device_types.append(k)
+    # if is_substation:  # 厂站
+    #     if DEVICE_TYPE_MAP["1305"] in all_content:
+    #         device_types.append("1305")
+    #     if DEVICE_TYPE_MAP["1302"] in all_content:
+    #         device_types.append("1302")
+    #     if len(device_types) == 0:
+    #         device_types.append("1305")
+    #         device_types.append("1302")
+    # else:  # 主站
+    #     for k, v in DEVICE_TYPE_MAP.items():
+    #         if v in all_content:
+    #             device_types.append(k)
+    if DEVICE_TYPE_MAP["1305"] in all_content:
+        device_types.append("1305")
+    if DEVICE_TYPE_MAP["1302"] in all_content:
+        device_types.append("1302")
+    if len(device_types) == 0:
+        device_types.append("1305")
+        device_types.append("1302")
     return device_types
 
 

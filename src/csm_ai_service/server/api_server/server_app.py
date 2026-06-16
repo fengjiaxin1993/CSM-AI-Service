@@ -12,7 +12,7 @@ from csm_ai_service.server.api_server.audit_rule_routes import audit_rule_router
 from csm_ai_service.server.api_server.contract_routes import contract_router
 from csm_ai_service.server.api_server.ocr_routes import ocr_router
 from csm_ai_service.server.api_server.task_routes import task_router
-from starlette.responses import RedirectResponse, FileResponse
+from starlette.responses import RedirectResponse, FileResponse, JSONResponse
 
 from csm_ai_service.server.api_server.platform_warning_routes import platform_warning_router
 from csm_ai_service.server.api_server.tickets_routes import ticket_router
@@ -47,8 +47,7 @@ atexit.register(_force_cleanup)
 
 def create_app():
     app = FastAPI(title="Langchain-Chatchat API Server")
-    if Settings.basic_settings.DEBUG:
-        MakeFastAPIOffline(app)
+    MakeFastAPIOffline(app)
     # Add CORS middleware to allow all origins
     # 在config.py中设置OPEN_DOMAIN=True，允许跨域
     # set OPEN_DOMAIN=True in config.py to allow cross-domain
@@ -63,6 +62,8 @@ def create_app():
 
     @app.get("/", summary="首页", include_in_schema=False)
     async def document():
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         return RedirectResponse(url="/index")
 
     @app.on_event("shutdown")
@@ -81,6 +82,8 @@ def create_app():
     @app.get("/index",summary="文档展示页面", include_in_schema=False)
     async def root():
         """根路由 - 返回前端页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         frontend_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "index.html")
         if os.path.exists(frontend_path):
             return FileResponse(frontend_path)
@@ -89,6 +92,8 @@ def create_app():
     @app.get("/rules",summary="规则库管理文档", include_in_schema=False)
     async def rules_page():
         """规则管理页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         rules_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "rules.html")
         if os.path.exists(rules_path):
             return FileResponse(rules_path)
@@ -97,6 +102,8 @@ def create_app():
     @app.get("/contracts",summary="合同与任务管理", include_in_schema=False)
     async def contracts_page():
         """合同与任务管理页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         contracts_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "contracts.html")
         if os.path.exists(contracts_path):
             return FileResponse(contracts_path)
@@ -105,6 +112,8 @@ def create_app():
     @app.get("/results",summary="审计结果查看", include_in_schema=False)
     async def results_page():
         """审计结果查看页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         results_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "results.html")
         if os.path.exists(results_path):
             return FileResponse(results_path)
@@ -112,10 +121,14 @@ def create_app():
 
     @app.get("/docs", summary="swagger 文档", include_in_schema=False)
     async def document():
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         return RedirectResponse(url="/docs")
 
     @app.get("/", summary="界面首页", include_in_schema=False)
     async def document():
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
         return RedirectResponse(url="/index")
 
     app.include_router(ocr_router)
