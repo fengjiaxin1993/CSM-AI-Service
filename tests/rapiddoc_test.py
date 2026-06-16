@@ -160,7 +160,7 @@ def html_table_to_info(html_table) -> dict:
 
 
 if __name__ == "__main__":
-    file_path = r"D:\github\CSM-AI-Service\src\csm_ai_service\test_api\pytest\data\告警处置报告-demo-图片版.pdf"
+    file_path = r"/test_api/pytest/data/告警处置报告-demo-图片版.pdf"
     engine = get_rapid_doc_engine()
 
     # bytes_list = images_to_bytes_list(images)
