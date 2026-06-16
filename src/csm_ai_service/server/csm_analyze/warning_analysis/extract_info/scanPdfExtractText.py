@@ -4,9 +4,17 @@ from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.helper impo
     html_table_to_info
 from csm_ai_service.server.ocr.single_ocr_engine import get_rapid_doc_engine
 from csm_ai_service.server.utils import build_logger
-
 logger = build_logger()
-
+import logging
+logging.getLogger("faiss").setLevel(logging.ERROR)
+logging.getLogger("rapid_doc").setLevel(logging.ERROR)
+logging.getLogger("rapid_doc.cli.common").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
+logging.getLogger("rapid_doc.cli.tools").setLevel(logging.ERROR)
+logging.getLogger("rapid_doc.utils").setLevel(logging.ERROR)
+logging.getLogger("rapidocr").setLevel(logging.ERROR)
+logging.getLogger("rapid_table").setLevel(logging.ERROR)
+logging.getLogger("rapid_layout").setLevel(logging.ERROR)
+logging.getLogger("onnxruntime").setLevel(logging.ERROR)
 
 class SCANPDFExtractText:
     """电力行业告警报告PDF扫描件解析器（使用RapidOCR）"""

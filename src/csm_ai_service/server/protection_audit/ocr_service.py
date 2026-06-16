@@ -15,7 +15,8 @@ from csm_ai_service.server.ocr.ocr_helper import _convert_pdf_to_images, images_
 # 屏蔽 rapid_doc 及其相关库的日志
 logging.getLogger("faiss").setLevel(logging.ERROR)
 logging.getLogger("rapid_doc").setLevel(logging.ERROR)
-logging.getLogger("rapid_doc.cli.tools").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
+logging.getLogger("rapid_doc.cli.common").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
+logging.getLogger("rapid_doc.cli.tools").setLevel(logging.ERROR)
 logging.getLogger("rapid_doc.utils").setLevel(logging.ERROR)
 logging.getLogger("rapidocr").setLevel(logging.ERROR)
 logging.getLogger("rapid_table").setLevel(logging.ERROR)

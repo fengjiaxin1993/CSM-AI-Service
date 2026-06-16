@@ -1,10 +1,11 @@
 [tool.poetry]
 name = "icdo"
-version = "1.2.0"
+version = "1.2.1"
 description = "ICDO智能问答助手服务"
 authors = ["feng jiaxin"]
 readme = "README.md"
 packages = [{include = "csm_ai_service", from = "src"}]
+include = ["src/csm_ai_service/data/**/*"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -46,11 +47,6 @@ pytest-asyncio = "^0.23.0"
 pytest-order = "^1.2.0"
 black = "^24.0.0"
 flake8 = "^7.0.0"
-
-[tool.pytest.ini_options]
-markers = [
-    "order: test execution order (provided by pytest-order)",
-]
 
 [tool.poetry.scripts]
 icdo = "csm_ai_service.cli:main"

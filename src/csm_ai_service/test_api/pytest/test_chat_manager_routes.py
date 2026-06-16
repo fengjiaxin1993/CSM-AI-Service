@@ -2,7 +2,8 @@
 import json
 import httpx
 import pytest
-from test_api.pytest.config import BASE
+
+from conftest import BASE
 
 
 @pytest.mark.asyncio

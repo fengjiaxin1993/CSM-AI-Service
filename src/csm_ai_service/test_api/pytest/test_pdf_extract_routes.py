@@ -5,7 +5,7 @@ import os
 import httpx
 import pytest
 
-from test_api.pytest.config import BASE
+from conftest import BASE
 PDF_NAME = "2018泉州供电公司调度自动化系统信息安全等级测评报告-S2A3G3.pdf"
 PDF_PATH = os.path.join(os.path.dirname(__file__),"data", PDF_NAME)
 

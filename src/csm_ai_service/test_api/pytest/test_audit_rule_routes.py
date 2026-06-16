@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from test_api.pytest.config import BASE
+from conftest import BASE
 
 # 用于测试的规则数据，按顺序创建->查询->更新->删除
 _test_rule_id = None

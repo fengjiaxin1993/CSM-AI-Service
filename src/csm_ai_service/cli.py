@@ -4,6 +4,8 @@ from pathlib import Path
 
 # 屏蔽 pydantic 模块下所有 UserWarning
 warnings.filterwarnings("ignore", category=UserWarning, module=r"pydantic.*")
+# 屏蔽 langgraph 的 LangChainPendingDeprecationWarning
+warnings.filterwarnings("ignore", message=".*allowed_objects.*", category=Warning)
 import click
 from csm_ai_service.utils import build_logger
 from csm_ai_service.startup import main as startup_main
