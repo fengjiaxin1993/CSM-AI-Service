@@ -4,9 +4,9 @@ from typing import Optional
 from fastapi import APIRouter, Body, UploadFile, File
 from csm_ai_service.server.utils import ApiResponse
 from csm_ai_service.server.protection_audit.audit.extract_audit import get_audit_fields_from_db
-from csm_ai_service.server.protection_audit.common.file_tools import ensure_cache_dir
-from csm_ai_service.server.protection_audit.common.pdf_tools import get_pdf_pages
-from csm_ai_service.server.protection_audit.common.task_queue import task_worker
+from csm_ai_service.server.protection_audit.tools.file_tools import ensure_cache_dir
+from csm_ai_service.server.protection_audit.tools.pdf_tools import get_pdf_pages
+from csm_ai_service.server.protection_audit.task_queue import task_worker
 from csm_ai_service.settings import Settings
 from csm_ai_service.server.db.repository.contract_repository import get_contract_by_name, add_contract
 from csm_ai_service.server.db.repository.task_repository import get_task_by_id, add_task

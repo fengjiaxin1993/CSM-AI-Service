@@ -15,7 +15,7 @@ from csm_ai_service.server.db.repository.task_repository import (
     list_tasks,
     delete_task,
 )
-from csm_ai_service.server.protection_audit.common.task_queue import task_worker
+from csm_ai_service.server.protection_audit.task_queue import task_worker
 
 
 # ==================== 路由定义 ====================

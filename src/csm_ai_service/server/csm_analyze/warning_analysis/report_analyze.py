@@ -3,13 +3,13 @@ import os
 from typing import List, Optional, Tuple, Dict
 from fastapi import Body, UploadFile, File
 from langchain_core.prompts import ChatPromptTemplate
-from csm_ai_service.server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, BaseResponse, get_default_embedding
+from csm_ai_service.server.utils import get_default_llm, get_ChatOpenAI, get_prompt_template, BaseResponse, \
+    get_default_embedding, fix_llm_json_output
 from langchain_core.documents import Document
 
 from csm_ai_service.server.conversation.chat.utils import History
 from csm_ai_service.server.conversation.knowledge_base.kb_service.base import KBServiceFactory
-from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.helper import output_standard_dict, _init_structured_fields, \
-    fix_llm_json_output
+from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.helper import output_standard_dict, _init_structured_fields
 from csm_ai_service.server.csm_analyze.warning_analysis.extract_structed_data import extract_dict_from_file_by_llm
 from csm_ai_service.settings import Settings
 from csm_ai_service.utils import build_logger
@@ -152,9 +152,8 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
     ext = os.path.splitext(file.filename)[-1].lower()
     try:
         result = extract_dict_from_file_by_llm(new_file_path, file_name, ext)
-        logger.debug(f"\n【step 3】修复后大模型提取处置报告【{file_name}】的json:\n {result}")
         result = output_standard_dict(_init_structured_fields(), result)
-        logger.debug(f"\n【step 4】标准化告警处置报告【{file_name}】的结果:\n {result}")
+        logger.info(f"\n【step 3】标准化告警处置报告【{file_name}】的结果")
         # 存入缓存
         set_warning_data_to_cache(warning_number, result)
     except Exception as e:
@@ -183,9 +182,9 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
         response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
         content = response.content  # 核心：提取完整回答文本
-        logger.debug(f"\n【step 5】大模型对{file_name}处置报告的智能研判结果原始内容: \n{content}")
+        logger.debug(f"\n【step 4】调用大模型对{file_name}处置报告的智能研判结果")
         res_dic = fix_llm_json_output(content)
-        logger.debug(f"\n【step 6】修复对{file_name}的智能研判结果json: \n{res_dic}")
+        logger.debug(f"\n【step 5】修复对{file_name}的智能研判结果json: \n{res_dic}")
         res_dic = output_standard_dict(init_warning_fields(), res_dic)
         return BaseResponse(data=res_dic)
     except Exception as e:

@@ -4,6 +4,7 @@ import re
 # 表格由于结构化识别，总是出现问题，因此采用ocr的方法，解决表格识别问题
 import warnings
 import logging
+
 logging.getLogger("DownloadModel").setLevel(logging.WARNING)
 from json_repair import repair_json
 
@@ -119,73 +120,62 @@ def clean_text(text):
     return text
 
 
-# 修复大模型输出库
-def fix_llm_json_output(bad_json_str: str) -> dict:
+
+def html_table_to_info(html_table) -> dict:
     """
-    修复大模型输出的JSON字符串，处理各种格式问题
+    把 RapidDoc 输出的 <table> 表格 转成 标准 Markdown 表格
+    支持 rowspan / colspan 合并单元格
     """
-    if not bad_json_str or not isinstance(bad_json_str, str):
+    soup = BeautifulSoup(html_table, "html.parser")
+    table = soup.find("table")
+    if not table:
         return {}
 
-    # 第一步：清理特殊字符
-    cleaned_str = bad_json_str.strip()
-    # 移除零宽字符
-    cleaned_str = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', cleaned_str)
-    # 移除控制字符（保留换行符和制表符）
-    cleaned_str = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', cleaned_str)
-    # 统一换行符
-    cleaned_str = cleaned_str.replace('\r\n', '\n').replace('\r', '\n')
-    # 移除开头和结尾的 markdown 代码块标记
-    cleaned_str = re.sub(r'^```json\s*', '', cleaned_str)
-    cleaned_str = re.sub(r'^```\s*', '', cleaned_str)
-    cleaned_str = re.sub(r'```\s*$', '', cleaned_str)
+    rows = table.find_all("tr")
+    if len(rows) < 1:
+        return {}
 
-    # 第二步：尝试直接解析
-    try:
-        return json.loads(cleaned_str)
-    except json.JSONDecodeError:
-        pass
+    # 处理跨行跨列核心逻辑
+    row_span_map = []
+    table_data = []
 
-    # 第三步：使用正则提取最外层的大括号内容
-    try:
-        # 匹配最外层的大括号（考虑嵌套）
-        match = re.search(r'\{[\s\S]*\}', cleaned_str)
-        if match:
-            extracted = match.group()
-            try:
-                return json.loads(extracted)
-            except json.JSONDecodeError:
-                pass
-    except Exception:
-        pass
+    for tr in rows:
+        cells = tr.find_all(["td", "th"])
+        current_row = []
+        col_idx = 0
 
-    # 第四步：使用 repair_json 库修复
-    try:
-        repaired = repair_json(
-            cleaned_str,
-            ensure_ascii=False,
-            return_objects=True
-        )
-        if isinstance(repaired, dict):
-            return repaired
-        elif isinstance(repaired, str):
-            return json.loads(repaired)
-    except Exception:
-        pass
+        # 填充跨行遗留单元格
+        while col_idx < len(row_span_map) and row_span_map[col_idx] > 0:
+            current_row.append(table_data[-1][col_idx])
+            row_span_map[col_idx] -= 1
+            col_idx += 1
 
-    # 第五步：手动处理常见问题
-    try:
-        manual_fix = cleaned_str
-        # 移除尾部的逗号（在 } 或 ] 前的逗号）
-        manual_fix = re.sub(r',(\s*[}\]])', r'\1', manual_fix)
-        # 处理未转义的换行符（在字符串值中）
-        # 这里需要小心处理，使用简单的启发式方法
-        return json.loads(manual_fix)
-    except json.JSONDecodeError:
-        pass
+        for cell in cells:
+            text = cell.get_text(strip=True)
+            colspan = int(cell.get("colspan", 1))
+            rowspan = int(cell.get("rowspan", 1))
 
-    # 所有方法都失败，返回空字典
-    return {}
+            # 处理跨列
+            for _ in range(colspan):
+                current_row.append(text)
+                # 处理跨行
+                if rowspan > 1:
+                    while len(row_span_map) <= col_idx:
+                        row_span_map.append(0)
+                    row_span_map[col_idx] = rowspan - 1
+                col_idx += 1
+
+        table_data.append(current_row)
+
+    # 生成标准 Markdown 表格
+    table_info = {}
+    if len(table_data) > 0:
+        header_list = table_data[0]
+        first_line = table_data[1]
+        for i, header in enumerate(header_list):
+            if i < len(first_line):
+                table_info[clean_text(header)] = clean_text(first_line[i])
+    return table_info
 
 
 if __name__ == "__main__":

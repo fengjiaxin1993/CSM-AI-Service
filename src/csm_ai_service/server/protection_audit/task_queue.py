@@ -19,12 +19,12 @@ from csm_ai_service.server.db.repository.task_repository import (
 )
 from csm_ai_service.server.db.repository import get_contract_by_id, update_contract
 from csm_ai_service.server.db.repository import list_audit_rules
-from csm_ai_service.server.protection_audit.common.file_tools import save_ocr_result, load_cached_ocr_result, ensure_cache_dir
-from csm_ai_service.server.protection_audit.ocr.ocr_extract import process_file_ocr_by_path
-from csm_ai_service.server.protection_audit.audit.audit_graph import AuditRule, create_graph, GLOBAL_AUDIT_GRAPH
+from csm_ai_service.server.protection_audit.tools.file_tools import save_ocr_result, load_cached_ocr_result, ensure_cache_dir
+from csm_ai_service.server.protection_audit.audit.audit_graph import AuditRule, GLOBAL_AUDIT_GRAPH
 from csm_ai_service.settings import Settings
 from csm_ai_service.server.utils import build_logger
 from csm_ai_service.server.db.repository import init_default_rules
+from csm_ai_service.server.protection_audit.ocr_service import process_file_ocr_by_path
 
 logger = build_logger()
 

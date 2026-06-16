@@ -1,8 +1,8 @@
 from typing import Dict, Any, Optional, List
 
 from csm_ai_service.server.protection_audit.audit.audit_graph import RuleAuditResult, AuditRule
-from csm_ai_service.server.protection_audit.common.file_tools import load_cached_ocr_result
-from csm_ai_service.server.protection_audit.common.locate_tools import find_text_positions_in_json
+from csm_ai_service.server.protection_audit.tools.file_tools import load_cached_ocr_result
+from csm_ai_service.server.protection_audit.tools.locate_tools import find_text_positions_in_json
 from csm_ai_service.server.db.repository.audit_result_repository import get_audit_results_by_task_id
 
 # =========================================================

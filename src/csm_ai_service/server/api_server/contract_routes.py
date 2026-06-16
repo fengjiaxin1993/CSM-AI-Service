@@ -12,7 +12,7 @@ from csm_ai_service.server.db.repository.contract_repository import (
     delete_contract,
 )
 from csm_ai_service.settings import Settings
-from csm_ai_service.server.protection_audit.common.file_tools import delete_ocr_cache
+from csm_ai_service.server.protection_audit.tools.file_tools import delete_ocr_cache
 
 # ==================== 路由定义 ====================
 contract_router = APIRouter(prefix="/api/contracts", tags=["合同管理"])

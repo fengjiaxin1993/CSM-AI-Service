@@ -1,7 +1,5 @@
 import logging
 import os
-from pathlib import Path
-from typing import Optional
 
 # 限制 ONNX Runtime 线程数，减少内存占用
 os.environ.setdefault("OMP_NUM_THREADS", "2")          # OpenMP 线程数
@@ -14,7 +12,7 @@ from csm_ai_service.settings import Settings
 # 屏蔽 rapid_doc 及其相关库的日志
 logging.getLogger("faiss").setLevel(logging.ERROR)
 logging.getLogger("rapid_doc").setLevel(logging.ERROR)
-logging.getLogger("rapid_doc.cli.common").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
+logging.getLogger("rapid_doc.cli.tools").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
 logging.getLogger("rapid_doc.utils").setLevel(logging.ERROR)
 logging.getLogger("rapidocr").setLevel(logging.ERROR)
 logging.getLogger("rapid_table").setLevel(logging.ERROR)
@@ -42,7 +40,7 @@ def get_rapid_doc_engine() -> RapidDoc:
             "Rec.model_path": Settings.basic_settings.RAPID_DOC_REC_MODEL_PATH,
             "Cls.model_path": Settings.basic_settings.RAPID_DOC_CLS_MODEL_PATH,
 
-            "Det.ocr_version": OCRVersion.PPOCRV4,
+            "Det.ocr_version": OCRVersion.PPOCRV5,
             "Rec.ocr_version": OCRVersion.PPOCRV4,
             "Cls.ocr_version": OCRVersion.PPOCRV4,
 

@@ -5,9 +5,8 @@ from typing import Dict
 from langchain_core.prompts import ChatPromptTemplate
 
 from csm_ai_service.server.conversation.chat.utils import History
-# from server.csm_analyze.warning_analysis.extract_info.scanPdfExtractText import SCANPDFExtractText
-from csm_ai_service.server.utils import get_ChatOpenAI, get_default_llm, get_prompt_template
-from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.helper import fix_llm_json_output
+from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.scanPdfExtractText import SCANPDFExtractText
+from csm_ai_service.server.utils import get_ChatOpenAI, get_default_llm, get_prompt_template, fix_llm_json_output
 from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.pdfExtractText import PDFExtractText
 from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.wordExtractText import WORDExtractText
 from csm_ai_service.settings import Settings
@@ -45,7 +44,7 @@ def extract_structured_data(file_name: str, full_text: str,
     response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
     content = response.content  # 核心：提取完整回答文本
-    logger.debug(f"\n【step 2】大模型提取{file_name}的原始content:\n {content}")
+    logger.info(f"\n【step 2】大模型提取{file_name}的结构化信息")
 
     result = fix_llm_json_output(content)
     return result
@@ -61,16 +60,16 @@ def extract_text_from_file(file_path: str, ext: str) -> tuple[str, str]:
         parser = PDFExtractText(file_path)
         full_text = parser.full_text
         table_data_text = str(parser.tables_data)
-        # if len(full_text) <= 50:  # 50个字都没有，使用ocr识别
-        #     parser = SCANPDFExtractText(file_path)
-        #     full_text = parser.full_text
-        #     table_data_text = str(parser.table_data)
+        if len(full_text) <= 50:  # 50个字都没有，使用ocr识别
+            parser = SCANPDFExtractText(file_path)
+            full_text = parser.full_text
+            table_data_text = str(parser.table_data)
         return full_text, table_data_text
 
 
 def extract_dict_from_file_by_llm(file_path: str, file_name: str, ext: str) -> Dict:
     full_text, table_data_text = extract_text_from_file(file_path, ext)
-    logger.debug(f"\n【step 1】{file_name} 的抽取信息:\nfull_text:\n {full_text[:100]}, \ntable_data_text: {table_data_text}")
+    logger.info(f"\n【step 1】{file_name} 的抽取信息:\nfull_text:\n {full_text[:50]}, \ntable_data_text: {table_data_text}")
     return extract_structured_data(file_name, full_text, table_data_text)
 
 

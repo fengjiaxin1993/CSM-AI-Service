@@ -5,24 +5,26 @@ RapidDoc 服务 - 支持并发限制为 3
 """
 import gc
 import logging
-import os
 import time
 from typing import List
 import fitz  # PyMuPDF
 from fastapi import Body
 from rapid_doc import RapidDocOutput
+from csm_ai_service.server.ocr.ocr_helper import _convert_pdf_to_images, images_to_bytes_list
 
 # 屏蔽 rapid_doc 及其相关库的日志
 logging.getLogger("faiss").setLevel(logging.ERROR)
 logging.getLogger("rapid_doc").setLevel(logging.ERROR)
-logging.getLogger("rapid_doc.cli.common").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
+logging.getLogger("rapid_doc.cli.tools").setLevel(logging.ERROR)  # "end_page_id is out of range" 警告
 logging.getLogger("rapid_doc.utils").setLevel(logging.ERROR)
 logging.getLogger("rapidocr").setLevel(logging.ERROR)
 logging.getLogger("rapid_table").setLevel(logging.ERROR)
 logging.getLogger("rapid_layout").setLevel(logging.ERROR)
 logging.getLogger("onnxruntime").setLevel(logging.ERROR)
-from csm_ai_service.server.protection_audit.ocr.ocr_helper import _convert_pdf_to_images, images_to_bytes_list, handle_rapidDocOutputs
-from csm_ai_service.server.protection_audit.ocr.single_ocr_engine import get_rapid_doc_engine
+from csm_ai_service.server.protection_audit.tools.ocr_tools import handle_rapidDocOutputs
+from csm_ai_service.server.ocr.single_ocr_engine import get_rapid_doc_engine
+import os
+from typing import Dict
 from csm_ai_service.settings import Settings
 from csm_ai_service.server.utils import build_logger
 logger = build_logger()
@@ -146,3 +148,38 @@ def pdf2info(
         logger.error(f"处理文件失败: {e}")
         result["error"] = str(e)
         return result
+
+
+
+
+
+
+def process_file_ocr_by_path(file_path: str) -> Dict:
+    """
+    直接调用 OCR 服务解析文件（不处理缓存，由调用方自行管理）
+    用于 task_queue 异步任务流程
+
+    Args:
+        file_path: 文件路径
+
+    Returns:
+        {
+            "locate_json_result": dict,
+            "markdown_text": str,
+            "structure_json_result": dict
+        }
+    """
+    if not os.path.exists(file_path):
+        return {'error': f"文件不存在: {file_path}"}
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+    if file_ext != '.pdf':
+        return {'error': f"不支持该文件格式: {file_path}"}
+
+    try:
+        logger.info(f"开始OCR处理(无缓存): {file_path}")
+        result = pdf2info(file_path)
+        return result
+    except Exception as e:
+        logger.error(f"OCR处理异常: {str(e)}")
+        return {'error': str(e)}
