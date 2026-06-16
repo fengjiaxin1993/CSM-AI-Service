@@ -2,8 +2,7 @@
 import json
 import httpx
 import pytest
-
-BASE = "http://127.0.0.1:7861"
+from test_api.pytest.config import BASE
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-BASE = "http://127.0.0.1:7861"
+from test_api.pytest.config import BASE
 
 # 用于测试的规则数据，按顺序创建->查询->更新->删除
 _test_rule_id = None

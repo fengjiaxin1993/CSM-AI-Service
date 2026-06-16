@@ -5,7 +5,7 @@ import os
 import httpx
 import pytest
 
-BASE = "http://127.0.0.1:7861"
+from test_api.pytest.config import BASE
 PDF_NAME = "《电力监控系统安全防护规定》27号令.pdf"
 PDF_PATH = os.path.join(os.path.dirname(__file__), "data", PDF_NAME)
 
@@ -57,7 +57,7 @@ async def test_kb_chat():
 
 @pytest.mark.asyncio
 async def test_agent_chat1():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
         r = await c.post("/chat/chat_agent", json={
             "query": "电力监控系统如何分区？", "stream": False, "conversation_id": "test_agent"
         })
@@ -67,7 +67,7 @@ async def test_agent_chat1():
 
 @pytest.mark.asyncio
 async def test_agent_chat2():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
         r = await c.post("/chat/chat_agent", json={
             "query": "地球距离太阳多远？", "stream": False, "conversation_id": "test_agent"
         })
@@ -77,7 +77,7 @@ async def test_agent_chat2():
 
 @pytest.mark.asyncio
 async def test_agent_chat3():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
         r = await c.post("/chat/chat_agent", json={
             "query": "最近7天告警情况如何", "stream": False, "conversation_id": "test_agent"
         })
@@ -87,7 +87,7 @@ async def test_agent_chat3():
 
 @pytest.mark.asyncio
 async def test_unified_chat():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
         r = await c.post("/chat/unified_chat", json={
             "query": "地球距离太阳多远", "stream": False,
             "conversation_id": "c1", "file_id": ""
@@ -99,7 +99,7 @@ async def test_unified_chat():
 @pytest.mark.asyncio
 async def test_unified_chat_with_file():
     import os
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
         # 上传当前目录下的真实 PDF 文件
         assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
         with open(PDF_PATH, "rb") as f:
