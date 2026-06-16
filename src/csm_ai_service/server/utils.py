@@ -306,6 +306,34 @@ class ChatMessage(BaseModel):
             }
         }
 
+from typing import Optional
+from pydantic import BaseModel, Field
+
+class ApiResponse(BaseModel):
+    success: bool
+    message: str = ""
+    data: Optional[dict] = None
+
+class AuditRuleCreate(BaseModel):
+    name: str = Field(..., description="规则名称")
+    description: str = Field(default="", description="规则详细描述")
+    chapter_keywords: List[str] = Field(default=[], description="相关章节关键词列表")
+    judge_logic: str = Field(default="", description="判断逻辑")
+
+class AuditRuleUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, description="规则名称")
+    description: Optional[str] = Field(default=None, description="规则详细描述")
+    chapter_keywords: Optional[List[str]] = Field(default=None, description="相关章节关键词列表")
+    judge_logic: Optional[str] = Field(default=None, description="判断逻辑")
+
+class AuditRuleResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    chapter_keywords: List[str]
+    judge_logic: str
+    create_time: Optional[str]
+    update_time: Optional[str]
 
 def run_async(cor):
     """

@@ -3,3 +3,7 @@ from .knowledge_file_repository import *
 from .user_message_repository import *
 from .conversation_repository import *
 from .message_repository import *
+from .audit_result_repository import *
+from .audit_rule_repository import *
+from .contract_repository import *
+from .task_repository import *

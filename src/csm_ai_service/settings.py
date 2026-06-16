@@ -36,6 +36,24 @@ class BasicSettings(BaseFileSettings):
         p = CHATCHAT_ROOT / "data"
         return p
 
+    @cached_property
+    def CACHE_DATA_PATH(self) -> Path:
+        """OCR缓存目录"""
+        p = self.DATA_PATH / "cache"
+        return p
+
+    @cached_property
+    def UPLOADS_DIR(self) -> Path:
+        """OCR缓存目录"""
+        p = self.DATA_PATH / "uploads"
+        return p
+
+    @cached_property
+    def HTML_DIR(self) -> Path:
+        """OCR缓存目录"""
+        p = self.DATA_PATH / "frontend"
+        return p
+
     # @computed_field
     @cached_property
     def NLTK_DATA_PATH(self) -> Path:
@@ -93,6 +111,33 @@ class BasicSettings(BaseFileSettings):
     PRINT_AGENT: bool = True
     """打印agent执行的中间状态"""
 
+    MAX_CONCURRENT_AUDIT_LLM: int = 2
+    """审计最多同时启用LLM数"""
+
+    PDF_DPI: int = 200
+    """OCR 使用的 DPI（控制 OCR 精度和速度），值越大越耗内存/显存，如遇到 OOM 错误请降低此值"""
+
+    RAPID_DOC_DET_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/ch_PP-OCRv5_mobile_det.onnx")
+    """rapid_doc 检测模型路径"""
+
+    RAPID_DOC_REC_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/ch_PP-OCRv4_rec_mobile.onnx")
+    """rapid_doc 识别模型路径"""
+
+    RAPID_DOC_CLS_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/ch_ppocr_mobile_v2.0_cls_mobile.onnx")
+    """rapid_doc 识别模型路径"""
+
+    RAPID_DOC_LAYOUT_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/pp_doclayoutv2.onnx")
+    """布局模型路径"""
+
+    RAPID_DOC_PADDLE_CLS_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/paddle_cls.onnx")
+    """表格识别路径"""
+
+    RAPID_DOC_UNET_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/unet.onnx")
+    """表格识别路径"""
+
+    RAPID_DOC_SLANET_MODEL_PATH: str = str(CHATCHAT_ROOT / "data/models/rapid_doc/slanet-plus.onnx")
+    """表格识别路径"""
+
     DEFAULT_BIND_HOST: str = "0.0.0.0" if sys.platform != "win32" else "127.0.0.1"
     """
     各服务器默认绑定host。如改为"0.0.0.0"需要修改下方所有XX_SERVER的host
@@ -109,12 +154,44 @@ class BasicSettings(BaseFileSettings):
             self.NLTK_DATA_PATH,
             self.LOG_PATH,
             self.BASE_TEMP_DIR,
-            self.TEMPLATE_PATH
+            self.TEMPLATE_PATH,
+            self.CACHE_DATA_PATH,
+            self.UPLOADS_DIR,
+            self.HTML_DIR
         ]:
             p.mkdir(parents=True, exist_ok=True)
         Path(self.KB_ROOT_PATH).mkdir(parents=True, exist_ok=True)
         Path(self.USER_ROOT_PATH).mkdir(parents=True, exist_ok=True)
         Path(self.WARNING_NOTICE_PATH).mkdir(parents=True, exist_ok=True)
+    def check_models(self) -> bool:
+        """检查模型文件是否存在，不存在则打印提示"""
+        required_models = [
+            ("RAPID_DOC_DET_MODEL_PATH", self.RAPID_DOC_DET_MODEL_PATH),
+            ("RAPID_DOC_REC_MODEL_PATH", self.RAPID_DOC_REC_MODEL_PATH),
+            ("RAPID_DOC_CLS_MODEL_PATH", self.RAPID_DOC_CLS_MODEL_PATH),
+            ("RAPID_DOC_LAYOUT_MODEL_PATH", self.RAPID_DOC_LAYOUT_MODEL_PATH),
+            ("RAPID_DOC_PADDLE_CLS_MODEL_PATH", self.RAPID_DOC_PADDLE_CLS_MODEL_PATH),
+            ("RAPID_DOC_UNET_MODEL_PATH", self.RAPID_DOC_UNET_MODEL_PATH),
+            ("RAPID_DOC_SLANET_MODEL_PATH", self.RAPID_DOC_SLANET_MODEL_PATH),
+        ]
+
+        missing = []
+        for name, path in required_models:
+            if not Path(path).exists():
+                missing.append((name, path))
+
+        if missing:
+            print("=" * 60)
+            print("⚠️  警告：以下模型文件缺失：")
+            for name, path in missing:
+                print(f"   - {path}")
+            print()
+            print("📦 请手动下载模型文件并放置到对应目录：")
+            print(f"   {self.DATA_PATH / 'models' / 'rapid_doc'}")
+            print()
+            print("=" * 60)
+            return False
+        return True
 
 
 class KBSettings(BaseFileSettings):
