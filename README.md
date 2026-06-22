@@ -436,6 +436,7 @@ python -m csm_ai_service.cli start
 | `OCR_MIN_TEXT_LENGTH` | `100` | 文本解析后文字数量低于此阈值时判定为扫描件，需调用 OCR |
 
 所有配置支持热重载，修改 YAML 后自动生效（部分需重启）。
+OCR服务一定要启动， 参考OCR-SERVICE这个项目
 
 ---
 

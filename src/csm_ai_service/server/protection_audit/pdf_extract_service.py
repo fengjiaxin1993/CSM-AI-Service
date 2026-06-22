@@ -131,7 +131,6 @@ def process_file_ocr_by_path(file_path: str) -> Dict:
         if text_length < min_text_length and ocr_enabled:
             logger.info(f"文字数量({text_length})低于阈值({min_text_length})，开始调用OCR服务: {file_path}")
             ocr_result = scanPdf2info(file_path)
-            print(ocr_result)
             if ocr_result.get("success", False):
                 return ocr_result
             else:
