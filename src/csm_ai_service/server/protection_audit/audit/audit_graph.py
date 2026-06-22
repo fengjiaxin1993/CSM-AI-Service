@@ -56,7 +56,7 @@ def llm_audit_single(rule: AuditRule, contract_markdown_json: dict, contract_id:
 
     with llm_semaphore:  # 进入自动占用令牌，超出MAX则阻塞排队
         prompt = f"""
-请基于合同内容和审计规则做合规审查，只返回JSON，禁止多余内容。
+请基于合同内容和审计规则做合规审查，合同正文中可能有markdown格式的表格数据,只返回JSON，禁止多余内容。
 【合同相关内容】
 {related_text}
 【审计规则名称】{rule.name}
@@ -68,7 +68,7 @@ def llm_audit_single(rule: AuditRule, contract_markdown_json: dict, contract_id:
     "is_compliant": true/false,
     "conclusion": "一句话结论",
     "reasoning": "详细的判断理由和解释"
-    "origin_text": "从原文中找出相关的内容,一定是原文中的内容"
+    "origin_text": "从原文中找出相关的内容,一定是合同相关内容中的原文"
 }}}}
 """
         resp = llm.invoke(prompt)

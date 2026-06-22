@@ -1,7 +1,7 @@
 """
 任务仓库 - 任务和任务-规则关联表的数据访问层
 """
-from typing import List
+from typing import List, Dict
 
 from csm_ai_service.server.protection_audit.audit.audit_graph import RuleAuditResult
 from csm_ai_service.server.db.models import AuditResultModel
@@ -41,6 +41,16 @@ def get_audit_results_by_task_id(session, task_id: int) -> List[RuleAuditResult]
         .order_by(AuditResultModel.id).all()
     return [_audit_result_to_dict(r) for r in results]
 
+@with_session
+def get_audit_result_by_result_id(session, result_id: int) -> RuleAuditResult | None:
+    """
+    获取指定任务的所有审计结果
+    """
+    r = session.query(AuditResultModel).filter_by(id=result_id).first()
+    if r is None:
+        return None
+
+    return _audit_result_to_dict(r)
 
 @with_session
 def update_audit_result(
@@ -103,18 +113,25 @@ def batch_add_audit_results(
         session,
         task_id: int,
         contract_id: int,
-        rule_ids: List[int],
+        rules: List[Dict],
 ) -> List[int]:
     """
     批量创建审计结果（初始化时，结果状态均为 False）
     返回创建的ID列表
     """
     ids = []
-    for rule_id in rule_ids:
+    for rule in rules:
+        rule_id = rule["id"]
+        rule_name = rule["name"]
+        rule_description = rule["description"]
+        rule_judge_logic = rule["judge_logic"]
         m = AuditResultModel(
             task_id=task_id,
             rule_id=rule_id,
             contract_id=contract_id,
+            rule_name=rule_name,
+            rule_description=rule_description,
+            rule_judge_logic=rule_judge_logic,
             is_compliant=False,
         )
         session.add(m)
@@ -122,7 +139,6 @@ def batch_add_audit_results(
         ids.append(m.id)
     session.commit()
     return ids
-
 
 # ==================== 辅助函数 ====================
 

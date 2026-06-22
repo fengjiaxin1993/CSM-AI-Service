@@ -68,7 +68,8 @@ def get_rapid_doc_engine() -> RapidDoc:
             table_config=table_config,
             layout_config=layout_config,
             formula_enable=False,
-            table_enable=True
+            table_enable=True,
+            backend="onnxruntime"
         )
     return _rapid_doc_engine
 

@@ -159,7 +159,7 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
     except Exception as e:
         data = init_warning_fields()
         data["audit_result"] = "需人工复核"
-        data["audit_details"] = f"解析{file.filename}失败，请人工查看"
+        data["audit_details"] = f"解析{file.filename}失败，请人工检查，可能是不支持OCR识别导致的"
         return BaseResponse(code=202, msg=f"解析{file.filename}失败，报错信息{e}", data=data)
     finally:
         os.remove(new_file_path)

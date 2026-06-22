@@ -13,15 +13,14 @@ from csm_ai_service.server.utils import build_logger
 logger = build_logger()
 
 
-def pdf_page_to_base64(doc: fitz.Document, page_num: int, zoom: float = 1.0) -> tuple:
+def pdf_page_to_base64(doc: fitz.Document, page_num: int) -> tuple:
     """将PDF页面转换为base64编码的PNG图像"""
     page = doc.load_page(page_num)
 
     # 获取页面原始尺寸（点）
     rect = page.rect
-
     # 计算矩阵（DPI缩放）
-    matrix = fitz.Matrix(zoom * Settings.basic_settings.PDF_DPI / 72, zoom * Settings.basic_settings.PDF_DPI / 72)
+    matrix = fitz.Matrix(Settings.basic_settings.PDF_DPI / 72, Settings.basic_settings.PDF_DPI / 72)
 
     # 渲染页面
     pix = page.get_pixmap(matrix=matrix)
@@ -34,15 +33,13 @@ def pdf_page_to_base64(doc: fitz.Document, page_num: int, zoom: float = 1.0) -> 
     img.save(buffer, format='PNG')
     img_base64 = base64.b64encode(buffer.getvalue()).decode()
 
-    # OCR 在 150 DPI 下运行，返回 OCR 参考尺寸用于前端坐标换算
-    ocr_zoom = Settings.basic_settings.PDF_DPI / 72.0
-    ocr_width = rect.width * ocr_zoom
-    ocr_height = rect.height * ocr_zoom
+    ocr_width = rect.width
+    ocr_height = rect.height
 
     return img_base64, pix.width, pix.height, ocr_width, ocr_height
 
 
-def get_pdf_pages(filepath: str, zoom_factor: float = 1.0) -> Dict[str, Any]:
+def get_pdf_pages(filepath: str) -> Dict[str, Any]:
     """
     获取PDF所有页面的图片（base64编码）和尺寸信息
 
@@ -87,15 +84,15 @@ def get_pdf_pages(filepath: str, zoom_factor: float = 1.0) -> Dict[str, Any]:
 
         for page_num in range(doc.page_count):
             img_base64, width, height, ocr_width, ocr_height = pdf_page_to_base64(
-                doc, page_num, zoom_factor
+                doc, page_num
             )
             pages_data.append({
                 "page_num": page_num,
                 "img_base64": img_base64,
                 "width": width,
                 "height": height,
-                "ocr_width": 595,
-                "ocr_height": 842
+                "ocr_width": ocr_width,
+                "ocr_height": ocr_height
             })
         doc.close()
 

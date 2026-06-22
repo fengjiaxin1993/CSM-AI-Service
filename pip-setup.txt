@@ -23,6 +23,7 @@ pip install click
 
 pip install docx2txt
 
+pip install rapid-doc[cpu] -i https://mirrors.aliyun.com/pypi/simple
 pip install openpyxl pandas
 pip install msoffcrypto
 pip install pytest

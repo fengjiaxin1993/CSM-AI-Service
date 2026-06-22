@@ -6,7 +6,6 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from csm_ai_service.server.protection_audit.task_queue import stop_task_workers, start_task_workers
-from csm_ai_service.server.protection_audit.ocr_service import startup_event
 from csm_ai_service.server.api_server.audit_result_routes import audit_result_router
 from csm_ai_service.server.api_server.audit_rule_routes import audit_rule_router
 from csm_ai_service.server.api_server.contract_routes import contract_router
@@ -24,26 +23,8 @@ from csm_ai_service.server.utils import MakeFastAPIOffline
 from csm_ai_service.server.api_server.pdf_extract_routes import pdf_extract_router
 from csm_ai_service.server.api_server.chat_manager_routes import chat_manager_router
 from csm_ai_service.utils import build_logger
-from csm_ai_service.server.ocr.single_ocr_engine import _rapid_doc_engine
 logger = build_logger()
 
-
-def _force_cleanup():
-    """注册 atexit 钩子，确保退出时释放资源，避免卡住"""
-    try:
-        stop_task_workers()
-    except Exception:
-        pass
-    # 尝试释放 RapidDoc 全局引擎实例
-    try:
-        if _rapid_doc_engine is not None:
-            del _rapid_doc_engine
-    except Exception:
-        pass
-
-
-# 注册退出钩子，确保 Ctrl+C 时不会被 ONNX Runtime 线程阻塞
-atexit.register(_force_cleanup)
 
 def create_app():
     app = FastAPI(title="Langchain-Chatchat API Server")
@@ -77,7 +58,6 @@ def create_app():
     def on_startup():
         """服务启动时执行初始化"""
         start_task_workers()
-        startup_event()
 
     @app.get("/index",summary="文档展示页面", include_in_schema=False)
     async def root():

@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 from rapid_doc import RapidDocOutput
 import re
 from csm_ai_service.server.utils import build_logger
+from csm_ai_service.server.protection_audit.text_pdf_parser import PdfParseResult
+
 logger = build_logger()
 
 
@@ -78,6 +80,37 @@ def clean_html_tables_in_text(text):
 
 
 
+
+headers_to_split_on = [
+    ("#", "title"),
+    ("##", "title"),
+    ("###", "title"),
+    ("####", "title"),
+]
+
+
+def split_markdown(content: str) -> Dict[str, Any]:
+    from langchain_text_splitters import MarkdownHeaderTextSplitter
+
+    text_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on, strip_headers=False
+    )
+    docs = text_splitter.split_text(content)
+    res_list = []
+    for idx, doc in enumerate(docs):
+        dic = {}
+        text = doc.page_content
+        title = doc.metadata.get("title", "")
+        if title == "":
+            title = text.split("\n")[0]
+        dic["title"] = title
+        dic["text"] = text
+        dic["doc_id"] = f"doc_{idx}"
+        res_list.append(dic)
+    res = {"structure_json_result": res_list}
+    return res
+
+
 def handle_rapidDocOutputs(outputs: List[RapidDocOutput]) -> Dict[str, Any]:
     total_markdown = ""
     for idx, output in enumerate(outputs):
@@ -137,31 +170,36 @@ def handle_rapidDocOutputs(outputs: List[RapidDocOutput]) -> Dict[str, Any]:
     return res
 
 
-headers_to_split_on = [
-    ("#", "title"),
-    ("##", "title"),
-    ("###", "title"),
-    ("####", "title"),
-]
 
+def handle_pdfParseResult(result: PdfParseResult) -> Dict[str, Any]:
+    total_markdown = result.markdown # 表格已经清理过了
+    structure_json_result = split_markdown(total_markdown)
+    # 先markdown 结构化信息
+    layout_res_list = []
+    for page in result.pages:
+        parsing_res_list = []
+        for block in page.blocks:
+            doc_id = get_doc_id(block.text, structure_json_result["structure_json_result"])
+            parsing_res_list.append({
+                "block_id": block.block_id,
+                "block_content": block.text,
+                "block_type": block.block_type,
+                "block_bbox": block.bbox,
+                "doc_id": doc_id,
+            })
+        # 每页的信息
+        layout_res_list.append({
+            "meta": {
+                "page_idx": page.page_num,
+                "page_width": page.width,
+                "page_height": page.height,
+            },
+            "parsing_res_list": parsing_res_list,
+        })
 
-def split_markdown(content: str) -> Dict[str, Any]:
-    from langchain_text_splitters import MarkdownHeaderTextSplitter
-
-    text_splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=headers_to_split_on, strip_headers=False
-    )
-    docs = text_splitter.split_text(content)
-    res_list = []
-    for idx, doc in enumerate(docs):
-        dic = {}
-        text = doc.page_content
-        title = doc.metadata.get("title", "")
-        if title == "":
-            title = text.split("\n")[0]
-        dic["title"] = title
-        dic["text"] = text
-        dic["doc_id"] = f"doc_{idx}"
-        res_list.append(dic)
-    res = {"structure_json_result": res_list}
+    res = {
+        "layoutParsingResults": {"layout_res_list": layout_res_list},
+        "markdown": total_markdown,
+        "structureJsonResults": structure_json_result
+    }
     return res

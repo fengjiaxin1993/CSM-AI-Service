@@ -12,7 +12,8 @@ import threading
 import traceback
 from datetime import datetime
 
-from csm_ai_service.server.db.repository.audit_result_repository import batch_add_audit_results, update_audit_result
+from csm_ai_service.server.db.repository.audit_result_repository import batch_add_audit_results, update_audit_result, \
+    get_audit_result_by_result_id
 from csm_ai_service.server.db.repository.task_repository import (
     get_task_by_id,
     update_task
@@ -24,7 +25,7 @@ from csm_ai_service.server.protection_audit.audit.audit_graph import AuditRule, 
 from csm_ai_service.settings import Settings
 from csm_ai_service.server.utils import build_logger
 from csm_ai_service.server.db.repository import init_default_rules
-from csm_ai_service.server.protection_audit.ocr_service import process_file_ocr_by_path
+from csm_ai_service.server.protection_audit.pdf_extract_service import process_file_ocr_by_path
 
 logger = build_logger()
 
@@ -126,7 +127,7 @@ class TaskWorker:
     def _run_ocr(self, task_id: int, contract_id: int, file_path: str) -> dict:
         """执行 OCR：优先缓存，缓存未命中则调用 OCR 服务并缓存结果"""
         logger.info(f"[Task {task_id}] 阶段一：OCR识别开始")
-        update_task(task_id, status="ocr_processing", ocr_status="processing")
+        update_task(task_id, status="processing", ocr_status="processing")
         update_contract(contract_id, status="processing")
 
         t0 = datetime.now()
@@ -167,7 +168,7 @@ class TaskWorker:
     def _run_audit(self, task_id: int, contract_id: int, ocr_result: dict):
         """执行审计：加载规则 -> LangGraph 审计 -> 保存结果"""
         logger.info(f"[Task {task_id}] 阶段二：审计开始")
-        update_task(task_id, status="audit_processing", audit_status="processing")
+        update_task(task_id, audit_status="processing")
 
         t0 = datetime.now()
         try:
@@ -178,55 +179,57 @@ class TaskWorker:
                 logger.info(f"创建默认审计规则")
             logger.info(f"[Task {task_id}] 使用 {len(rules)} 条审计规则")
 
-            rule_ids = [r["id"] for r in rules]
-            result_ids = batch_add_audit_results(task_id, contract_id, rule_ids)
+            result_ids = batch_add_audit_results(task_id, contract_id, rules)
 
-            audit_rules = [
-                AuditRule(id=r["id"], name=r["name"],
-                          description=r.get("description", ""),
-                          chapter_keywords=r.get("chapter_keywords", []),
-                          judge_logic=r.get("judge_logic", ""))
-                for r in rules
-            ]
-            graph = GLOBAL_AUDIT_GRAPH
-            res = graph.invoke({
-                "contract_id": contract_id,
-                "contract_markdown_json": ocr_result.get("structure_json_result", {}),
-                "rule_list": audit_rules,
-                "single_rule_results": [],
-                "final_report": "",
-            })
-            single_results = res.get("single_rule_results", [])
-            final_report = res.get("final_report", "")
 
-            for i, rid in enumerate(result_ids):
-                if i >= len(single_results):
-                    break
-                r = single_results[i]
-                update_audit_result(
-                    rid,
-                    rule_name=r.rule_name,
-                    rule_description=getattr(r, 'rule_description', ""),
-                    rule_judge_logic=getattr(r, 'rule_judge_logic', ""),
-                    is_compliant=r.is_compliant,
-                    conclusion=getattr(r, 'conclusion', ""),
-                    reasoning=getattr(r, 'reasoning', ""),
-                    origin_text=getattr(r, 'origin_text', ""),
-                    related_chapters=getattr(r, 'related_chapters', []),
-                    related_text=getattr(r, 'related_text', ""),
-                    related_doc_ids=getattr(r, 'related_doc_ids', []),
-                )
+            # 不用走审计流程了，因为ocr没识别出来
+            if len(ocr_result.get("markdown_text", "")) <= Settings.basic_settings.OCR_MIN_TEXT_LENGTH:
+                for rid in result_ids:
+                    update_audit_result(
+                        rid,
+                        conclusion="无法识别上传的合同文件，无法进行审计",
+                        reasoning="由于客观因素，暂不支持识别扫描件",
+                    )
+            else:
+                audit_rules = [
+                    AuditRule(id=r["id"], name=r["name"],
+                              description=r.get("description", ""),
+                              chapter_keywords=r.get("chapter_keywords", []),
+                              judge_logic=r.get("judge_logic", ""))
+                    for r in rules
+                ]
+                graph = GLOBAL_AUDIT_GRAPH
+                res = graph.invoke({
+                    "contract_id": contract_id,
+                    "contract_markdown_json": ocr_result.get("structure_json_result", {}),
+                    "rule_list": audit_rules,
+                    "single_rule_results": [],
+                    "final_report": "",
+                })
+                single_results = res.get("single_rule_results", [])
+                for i, rid in enumerate(result_ids):
+                    if i >= len(single_results):
+                        break
+                    r = single_results[i]
+                    update_audit_result(
+                        rid,
+                        rule_name=r.rule_name,
+                        rule_description=getattr(r, 'rule_description', ""),
+                        rule_judge_logic=getattr(r, 'rule_judge_logic', ""),
+                        is_compliant=r.is_compliant,
+                        conclusion=getattr(r, 'conclusion', ""),
+                        reasoning=getattr(r, 'reasoning', ""),
+                        origin_text=getattr(r, 'origin_text', ""),
+                        related_chapters=getattr(r, 'related_chapters', []),
+                        related_text=getattr(r, 'related_text', ""),
+                        related_doc_ids=getattr(r, 'related_doc_ids', []),
+                    )
 
             t1 = datetime.now()
-            logger.info(f"[Task {task_id}] 审计完成，耗时: {(t1 - t0).total_seconds():.1f}s")
-
             update_task(
-                task_id, status="completed", audit_status="done",
-                audit_report=final_report, audit_start_time=t0, audit_end_time=t1,
+                task_id, status="completed", audit_status="done", audit_start_time=t0, audit_end_time=t1
             )
-
-            pass_count = sum(1 for r in single_results if r.is_compliant)
-            logger.info(f"[Task {task_id}] 任务完成！合规: {pass_count}, 不合规: {len(single_results) - pass_count}")
+            logger.info(f"[Task {task_id}] 审计完成，耗时: {(t1 - t0).total_seconds():.1f}s")
 
         except Exception as e:
             t1 = datetime.now()

@@ -29,7 +29,7 @@ async def pdf_pages(
     """
     if not filepath:
         return {"success": False, "error": "文件路径为空", "pages": []}
-    return get_pdf_pages(filepath, 1.0)
+    return get_pdf_pages(filepath)
 
 
 

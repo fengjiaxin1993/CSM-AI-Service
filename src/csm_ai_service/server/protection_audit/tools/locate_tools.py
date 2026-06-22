@@ -67,7 +67,15 @@ def find_text_positions_in_json(clause_text: str, doc_id_list: List[str], json_r
 
     clause_text_clean = '\n'.join(line.strip() for line in clause_text.split('\n'))
 
-    keywords_exact = generate_keywords(clause_text_clean, normalized=False)
+    # 先按标点符号切分 clause_text，再逐片段生成关键词
+    _RE_SPLIT = re.compile(r'[，,。.；;！!？?|、|：:；\n]+')
+    segments = [s.strip() for s in _RE_SPLIT.split(clause_text_clean) if s.strip()]
+
+    keywords_exact = []
+    for seg in segments:
+        keywords_exact.extend(generate_keywords(seg, normalized=False))
+
+    keywords_exact = list(set(k for k in keywords_exact if len(k) >= 1))
 
     matches = []
     matched_block_ids = set()

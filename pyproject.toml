@@ -5,7 +5,11 @@ description = "ICDO智能问答助手服务"
 authors = ["feng jiaxin"]
 readme = "README.md"
 packages = [{include = "csm_ai_service", from = "src"}]
-include = ["src/csm_ai_service/data/**/*"]
+include = [
+    "src/csm_ai_service/data/**/*",
+    "src/csm_ai_service/test_api/pytest/data/**/*",
+    "src/csm_ai_service/test_api/pytest/README_TEST.md",
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -40,6 +44,7 @@ httpx = "^0.27.0"
 tenacity = "^8.0.0"
 pandas = "^2.0.0"
 markdown = "^3.0.0"
+rapid-doc = "^0.9.7"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

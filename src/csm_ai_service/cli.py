@@ -1,4 +1,6 @@
 import shutil
+import subprocess
+import sys
 import warnings
 from pathlib import Path
 
@@ -41,9 +43,6 @@ def init():
         shutil.copytree(bs.PACKAGE_ROOT / "data/frontend",
                         Path(bs.DATA_PATH) / "frontend",
                         dirs_exist_ok=True)
-        shutil.copytree(bs.PACKAGE_ROOT / "data/models",
-                        Path(bs.DATA_PATH) / "models",
-                        dirs_exist_ok=True)
     logger.success("复制 samples 知识库文件：成功。")
     logger.info("开始创建相关表信息")
     create_tables()
@@ -53,8 +52,6 @@ def init():
 
     logger.info("生成默认配置文件：成功。")
     logger.warning("<red>请先检查 model_settings.yaml 里模型平台、LLM模型和Embed模型信息正确</red>")
-    # 启动时检查模型
-    Settings.basic_settings.check_models()
 
 
 main.add_command(startup_main, "start")
