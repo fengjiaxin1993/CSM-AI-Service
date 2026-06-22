@@ -150,18 +150,39 @@ START → SelectTool ──┬──(有工具)── ExecuteTool → SelectTool
 
 基于 PyMuPDF 解析 PDF，结合 LLM 进行表格结构识别和字段提取。
 
-### 6. 会话管理 (`/chat_manager`)
+### 6. 合同审计 (`/ocr_contract`)
+
+面向合同文档的 OCR 识别 + 智能审计全流程：
+
+1. **合同上传** → 保存文件
+2. **PDF 解析** → 先尝试文本 PDF 解析（`text_pdf_parser`），若提取文字不足则自动调用 OCR 服务（可配置开关和阈值）
+3. **结果缓存** → 解析结果持久化到文件缓存，避免重复解析
+4. **规则审计** → 基于配置的审计规则，通过 LangGraph 工作流逐条审计合同合规性
+5. **报告生成** → 输出每条规则的合规结论、推理过程和最终审计报告
+
+```
+上传合同 → task_queue 异步消费 → OCR/文本解析 → 缓存结果 → LangGraph 审计 → 保存审计结果
+```
+
+核心模块：
+- `text_pdf_parser.py`：基于 PyMuPDF 的文本 PDF 解析，支持目录识别、标题分级、表格提取、水印去除、页码去除
+- `pdf_extract_service.py`：PDF 解析调度，先文本后 OCR 的两级解析策略
+- `task_queue.py`：异步任务队列，单线程消费，支持 OCR → 审计两阶段编排
+- `audit/audit_graph.py`：LangGraph 审计工作流
+- `tools/locate_tools.py`：文本定位，按标点切分关键词匹配
+
+### 7. 会话管理 (`/chat_manager`)
 
 - 会话 CRUD（创建/保存/删除）
 - 会话消息查询（分页）
 - 收藏/取消收藏
 - 推荐问题生成
 
-### 7. 平台告警接收 (`/warning_handle`)
+### 8. 平台告警接收 (`/warning_handle`)
 
 模拟安全平台告警推送接口，接收告警原始数据并入库。
 
-### 8. 检修票关联 (`/ticket`)
+### 9. 检修票关联 (`/ticket`)
 
 根据检修对象、受影响对象、工作内容，通过 LLM 智能关联相关设备，区分变电站/非变电站场景。
 
@@ -214,6 +235,22 @@ START → SelectTool ──┬──(有工具)── ExecuteTool → SelectTool
   LLM 六维度审核 → 结构化审核结果 → (可选) 生成整改通知单
 ```
 
+### 合同审计流程
+
+```
+上传合同 PDF → task_queue 异步消费
+  → 阶段一(OCR)：text_pdf_parser 文本解析
+    → 文字充足(≥阈值) → 直接使用文本解析结果
+    → 文字不足 + OCR_ENABLED → 调用 OCR 服务 → 成功/失败回退
+    → 文字不足 + OCR_DISABLED → 使用文本解析结果
+  → 结果缓存到文件
+  → 阶段二(审计)：加载审计规则 → LangGraph 逐条审计 → 保存审计结果
+```
+
+**PDF 解析两级策略**：
+1. **第一级：文本 PDF 解析**（`text_pdf_parser`）：基于 PyMuPDF 直接提取文本，速度快、无外部依赖
+2. **第二级：OCR 服务**（条件触发）：当文本解析提取的文字数量低于 `OCR_MIN_TEXT_LENGTH` 且 `OCR_ENABLED=true` 时，调用外部 OCR 服务解析扫描件
+
 ### 向量缓存机制
 
 三类 FAISS 缓存池，基于 `ThreadSafeObject` 线程安全抽象：
@@ -259,6 +296,11 @@ csm_ai_service/
     │   ├── warning_routes.py           # /warning/*
     │   ├── platform_warning_routes.py  # /warning_handle/*
     │   ├── pdf_extract_routes.py       # /parse_pdf/*
+    │   ├── ocr_routes.py               # /ocr_contract/* (合同OCR)
+    │   ├── contract_routes.py          # 合同管理
+    │   ├── task_routes.py              # 审计任务管理
+    │   ├── audit_rule_routes.py        # 审计规则管理
+    │   ├── audit_result_routes.py      # 审计结果查询
     │   ├── tickets_routes.py           # /ticket/*
     │   └── chat_manager_routes.py      # /chat_manager/*
     │
@@ -306,6 +348,20 @@ csm_ai_service/
     │       ├── report_analyze.py      # 报告分析 (提取+研判)
     │       ├── gen_notice.py          # 整改通知单生成
     │       └── pdf_extract.py         # PDF 结构化提取
+    │
+    ├── protection_audit/              # 合同审计模块
+    │   ├── text_pdf_parser.py         # 文本 PDF 解析器 (PyMuPDF)
+    │   ├── pdf_extract_service.py     # PDF 解析调度 (文本优先→OCR)
+    │   ├── task_queue.py              # 异步任务队列 (OCR→审计)
+    │   ├── audit/                     # 审计工作流
+    │   │   ├── audit_graph.py         # LangGraph 审计图
+    │   │   ├── extract_audit.py       # 审计提取
+    │   │   └── model.py              # 审计数据模型
+    │   └── tools/                     # 审计工具
+    │       ├── file_tools.py          # 文件缓存/存储
+    │       ├── locate_tools.py        # 文本定位 (关键词切分匹配)
+    │       ├── ocr_tools.py           # OCR 结果处理
+    │       └── pdf_tools.py           # PDF 工具
     │
     └── db/                            # 数据库层
         ├── models/                    # SQLAlchemy 模型
@@ -365,11 +421,19 @@ python -m csm_ai_service.cli start
 
 | 配置文件 | 对应类 | 说明 |
 |---------|--------|------|
-| `basic_settings.yaml` | BasicSettings | 服务地址、数据目录、跨域、日志等 |
+| `basic_settings.yaml` | BasicSettings | 服务地址、数据目录、跨域、日志、OCR 开关/地址/阈值等 |
 | `kb_settings.yaml` | KBSettings | 知识库参数（分块大小、重叠、Top-K、相似度阈值） |
 | `model_settings.yaml` | ApiModelSettings | LLM/Embedding 模型、平台地址、温度等 |
 | `agent_tools_settings.yaml` | AgentToolsSettings | 告警智能体工具列表（URL、参数、描述） |
 | `prompt_settings.yaml` | PromptSettings | 各场景 Prompt 模板（RAG/Agent/Warning） |
+
+**`basic_settings.yaml` 中 OCR 相关配置**：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `OCR_ENABLED` | `true` | 是否启用 OCR 服务，关闭后仅使用文本 PDF 解析 |
+| `OCR_SERVICE_URL` | `http://127.0.0.1:7840` | OCR 服务地址 |
+| `OCR_MIN_TEXT_LENGTH` | `100` | 文本解析后文字数量低于此阈值时判定为扫描件，需调用 OCR |
 
 所有配置支持热重载，修改 YAML 后自动生效（部分需重启）。
 
@@ -438,6 +502,46 @@ python -m csm_ai_service.cli start
 | 方法 | 路由 | 说明 |
 |------|------|------|
 | POST | `/warning_handle/warning` | 接收平台告警数据 |
+
+### `/ocr_contract` — 合同 OCR 与审计
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/ocr_contract/upload` | 上传合同文件 |
+| POST | `/ocr_contract/parse` | 触发 OCR 解析 |
+| GET  | `/ocr_contract/status/{task_id}` | 查询解析/审计状态 |
+| GET  | `/ocr_contract/result/{task_id}` | 获取审计结果 |
+
+### 合同管理
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET  | `/contracts` | 合同列表 |
+| GET  | `/contracts/{id}` | 合同详情 |
+
+### 审计任务
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| POST | `/tasks` | 创建审计任务 |
+| GET  | `/tasks` | 任务列表 |
+| GET  | `/tasks/{id}` | 任务详情 |
+
+### 审计规则
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET  | `/audit_rules` | 规则列表 |
+| POST | `/audit_rules` | 创建规则 |
+| PUT  | `/audit_rules/{id}` | 更新规则 |
+| DELETE | `/audit_rules/{id}` | 删除规则 |
+
+### 审计结果
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| GET  | `/audit_results` | 结果列表 |
+| GET  | `/audit_results/{id}` | 结果详情 |
 
 ### `/ticket` — 检修票
 
