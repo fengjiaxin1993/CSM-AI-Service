@@ -116,7 +116,7 @@ class BasicSettings(BaseFileSettings):
     PDF_DPI: int = 200
     """OCR 使用的 DPI（控制 OCR 精度和速度），值越大越耗内存/显存，如遇到 OOM 错误请降低此值"""
 
-    OCR_ENABLED: bool = True
+    OCR_ENABLED: bool = False
     """是否启用 OCR 服务。关闭后仅使用文本PDF解析，不调用外部OCR服务"""
 
     OCR_SERVICE_URL: str = "http://127.0.0.1:7840"
