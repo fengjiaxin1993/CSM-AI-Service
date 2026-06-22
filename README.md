@@ -586,6 +586,7 @@ python cli.py start
 ### 1.2 pip可编辑安装（不依赖poetry）启动
 
 ```bash
+cd CSM-AI-Service
 # 可编辑模式安装项目（代码修改实时生效）
 pip install -e .
 # 安装后同样可以直接使用 CLI 命令：
