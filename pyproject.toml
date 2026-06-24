@@ -1,66 +1,69 @@
-[tool.poetry]
+[project]
 name = "icdo"
 version = "1.2.2"
 description = "ICDO智能问答助手服务"
-authors = ["feng jiaxin"]
+authors = [{name = "feng jiaxin"}]
 readme = "README.md"
-packages = [{include = "csm_ai_service", from = "src"}]
-include = [
-    "src/csm_ai_service/data/**/*",
-    "src/csm_ai_service/test_api/pytest/data/**/*",
-    "src/csm_ai_service/test_api/pytest/README_TEST.md",
+requires-python = ">=3.9"
+license = "MIT"
+
+dependencies = [
+    "fastapi==0.115.9",
+    "langchain==1.2.15",
+    "langchain-community==0.4.1",
+    "langchain-openai==1.2.1",
+    "langgraph==1.1.9",
+    "uvicorn==0.46.0",
+    "sse-starlette==1.8.2",
+    "PyMuPDF==1.27.2.3",
+    "json_repair==0.59.5",
+    "numpy==2.2.6",
+    "bs4==0.0.2",
+    "docxtpl==0.20.2",
+    "docx2txt==0.9",
+    "SQLAlchemy==2.0.49",
+    "pillow==12.2.0",
+    "opencv-python==4.13.0.92",
+    "chardet==7.4.3",
+    "nltk==3.9.4",
+    "memoization==0.4.0",
+    "ruamel-yaml==0.19.1",
+    "loguru==0.7.3",
+    "python-multipart==0.0.26",
+    "faiss-cpu==1.13.2",
+    "uuid==1.30",
+    "unstructured>=0.18.14",
+    "click>=8.0.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.27.0",
+    "tenacity>=8.0.0",
+    "pandas>=2.0.0",
+    "markdown>=3.0.0",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-fastapi = "0.115.9"
-langchain = "1.2.15"
-langchain-community = "0.4.1"
-langchain-openai = "1.2.1"
-langgraph = "1.1.9"
-uvicorn = "0.46.0"
-sse-starlette = "1.8.2"
-PyMuPDF = "1.27.2.3"
-json_repair = "0.59.5"
-numpy = "2.2.6"
-bs4 = "0.0.2"
-docxtpl = "0.20.2"
-docx2txt = "0.9"
-SQLAlchemy = "2.0.49"
-pillow = "12.2.0"
-opencv-python = "4.13.0.92"
-chardet = "7.4.3"
-nltk = "3.9.4"
-memoization = "0.4.0"
-ruamel-yaml = "0.19.1"
-loguru = "0.7.3"
-python-multipart = "0.0.26"
-faiss-cpu = "1.13.2"
-uuid = "1.30"
-unstructured = "0.18.32"
-click = "^8.0.0"
-pydantic = "^2.0.0"
-httpx = "^0.27.0"
-tenacity = "^8.0.0"
-pandas = "^2.0.0"
-markdown = "^3.0.0"
-rapid-doc = "^0.9.7"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-order>=1.2.0",
+    "black>=24.0.0",
+    "flake8>=7.0.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-pytest-asyncio = "^0.23.0"
-pytest-order = "^1.2.0"
-black = "^24.0.0"
-flake8 = "^7.0.0"
-
-[tool.poetry.scripts]
+[project.scripts]
 icdo = "csm_ai_service.cli:main"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-# 配置国内镜像源加速下载
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+csm_ai_service = ["data/**/*", "test_api/**/*", "server/api_server/static/**/*"]
+
+# 配置国内镜像源加速下载（Poetry 用，pip 不需要）
 [[tool.poetry.source]]
 name = "tsinghua"
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"

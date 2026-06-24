@@ -8,7 +8,15 @@ import os
 import httpx
 import pytest
 
-from conftest import BASE
+import yaml
+
+# 从 YAML 配置文件读取测试服务地址
+_config_path = "test_config.yaml"
+with open(_config_path, "r", encoding="utf-8") as f:
+    _config = yaml.safe_load(f)
+
+BASE = _config["server"]["base_url"]
+TIMEOUT = _config["server"].get("timeout", 120)
 PDF_NAME = "页面提取自－草台第一分散式电站电力监控系统二次安全防护实施方案.pdf"
 PDF_PATH = os.path.join(os.path.dirname(__file__),"data", PDF_NAME)
 # ==================== 全局变量 ====================

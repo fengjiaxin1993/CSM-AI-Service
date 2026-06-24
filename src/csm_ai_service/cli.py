@@ -43,6 +43,10 @@ def init():
         shutil.copytree(bs.PACKAGE_ROOT / "data/frontend",
                         Path(bs.DATA_PATH) / "frontend",
                         dirs_exist_ok=True)
+    if bs.PACKAGE_ROOT / "test_api" != bs.TEST_API_PATH:
+        shutil.copytree(bs.PACKAGE_ROOT / "test_api",
+                        bs.TEST_API_PATH,
+                        dirs_exist_ok=True)
     logger.success("复制 samples 知识库文件：成功。")
     logger.info("开始创建相关表信息")
     create_tables()

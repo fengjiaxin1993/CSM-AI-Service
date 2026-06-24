@@ -1,6 +1,5 @@
 from typing import Dict, List, Optional, Any
 from bs4 import BeautifulSoup
-from rapid_doc import RapidDocOutput
 import re
 from csm_ai_service.server.utils import build_logger
 from csm_ai_service.server.protection_audit.text_pdf_parser import PdfParseResult
@@ -111,63 +110,6 @@ def split_markdown(content: str) -> Dict[str, Any]:
     return res
 
 
-def handle_rapidDocOutputs(outputs: List[RapidDocOutput]) -> Dict[str, Any]:
-    total_markdown = ""
-    for idx, output in enumerate(outputs):
-        total_markdown += output.markdown
-        total_markdown += "\n"
-
-    final_markdown = clean_html_tables_in_text(total_markdown)
-    structure_json_result = split_markdown(final_markdown)
-    # 先markdown 结构化信息
-    layout_res_list = []
-    for idx, output in enumerate(outputs):
-        middle_json = output.middle_json
-        pdf_info_list = middle_json["pdf_info"]
-        pdf_info = pdf_info_list[0]
-        parsing_res_list = []
-        page_idx = pdf_info["page_idx"]
-        page_size = pdf_info["page_size"]  #[595,842]
-        page_width = page_size[0]
-        page_height = page_size[1]
-        para_blocks = pdf_info["para_blocks"]
-        for para_idx, block in enumerate(para_blocks):
-            block_idx = 0
-            lines = block.get("lines", [])
-            for line in lines:
-                spans = line.get("spans", [])
-                for span in spans:
-                    bbox = span["bbox"]
-                    score = span["score"]
-                    content = span["content"]
-                    block_type = span["type"]
-                    if block_type != "text":
-                        continue
-                    block_id = f"block_{page_idx}_{para_idx}_{block_idx}"
-                    doc_id = get_doc_id(content, structure_json_result["structure_json_result"])
-                    parsing_res_list.append({
-                        "block_id": block_id,
-                        "block_content": content,
-                        "block_type": block_type,
-                        "block_bbox": bbox,
-                        "doc_id": doc_id,
-                    })
-                    block_idx += 1
-        layout_res_list.append({
-            "meta": {
-                "page_idx": page_idx,
-                "page_width": page_width,
-                "page_height": page_height,
-            },
-            "parsing_res_list": parsing_res_list,
-        })
-
-    res = {
-        "layoutParsingResults": {"layout_res_list": layout_res_list},
-        "markdown": final_markdown,
-        "structureJsonResults": structure_json_result
-    }
-    return res
 
 
 

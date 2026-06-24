@@ -4,7 +4,15 @@ import os
 import httpx
 import pytest
 
-from conftest import BASE
+import yaml
+
+# 从 YAML 配置文件读取测试服务地址
+_config_path = "test_config.yaml"
+with open(_config_path, "r", encoding="utf-8") as f:
+    _config = yaml.safe_load(f)
+
+BASE = _config["server"]["base_url"]
+TIMEOUT = _config["server"].get("timeout", 120)
 DOCX_NAME = "关于110kVXX变告警说明.docx"
 DOCX_PATH = os.path.join(os.path.dirname(__file__),"data", DOCX_NAME)
 

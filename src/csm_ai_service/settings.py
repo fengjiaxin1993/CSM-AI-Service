@@ -37,6 +37,12 @@ class BasicSettings(BaseFileSettings):
         return p
 
     @cached_property
+    def TEST_API_PATH(self) -> Path:
+        """用户数据根目录"""
+        p = CHATCHAT_ROOT / "test_api"
+        return p
+
+    @cached_property
     def CACHE_DATA_PATH(self) -> Path:
         """OCR缓存目录"""
         p = self.DATA_PATH / "cache"
@@ -141,13 +147,14 @@ class BasicSettings(BaseFileSettings):
         '''创建所有数据目录'''
         for p in [
             self.DATA_PATH,
+            self.TEST_API_PATH,
             self.NLTK_DATA_PATH,
             self.LOG_PATH,
             self.BASE_TEMP_DIR,
             self.TEMPLATE_PATH,
             self.CACHE_DATA_PATH,
             self.UPLOADS_DIR,
-            self.HTML_DIR
+            self.HTML_DIR,
         ]:
             p.mkdir(parents=True, exist_ok=True)
         Path(self.KB_ROOT_PATH).mkdir(parents=True, exist_ok=True)
