@@ -19,7 +19,7 @@ PDF_PATH = os.path.join(os.path.dirname(__file__), "data", PDF_NAME)
 
 @pytest.mark.asyncio
 async def test_chat():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/chat", json={"query": "你好", "stream": False})
     assert r.status_code == 200
     print(f"[chat] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -27,7 +27,7 @@ async def test_chat():
 
 @pytest.mark.asyncio
 async def test_chat_stream():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/chat", json={"query": "你好", "stream": True})
     assert r.status_code == 200
     print(f"[chat_stream] 响应(前500字符): {r.text[:500]}")
@@ -35,7 +35,7 @@ async def test_chat_stream():
 
 @pytest.mark.asyncio
 async def test_mem_chat():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/mem_chat", json={
             "query": "你好", "conversation_id": "test", "history_len": 3, "stream": False
         })
@@ -45,7 +45,7 @@ async def test_mem_chat():
 
 @pytest.mark.asyncio
 async def test_similar_mem_chat():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/similar_mem_chat", json={
             "query": "你好", "user_id": "test_user", "stream": False
         })
@@ -55,7 +55,7 @@ async def test_similar_mem_chat():
 
 @pytest.mark.asyncio
 async def test_kb_chat():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/kb_chat", json={
             "query": "电力监控系统如何分区？", "kb_name": "samples", "stream": False, "return_direct": False
         })
@@ -65,7 +65,7 @@ async def test_kb_chat():
 
 @pytest.mark.asyncio
 async def test_agent_chat1():
-    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/chat_agent", json={
             "query": "电力监控系统如何分区？", "stream": False, "conversation_id": "test_agent"
         })
@@ -75,7 +75,7 @@ async def test_agent_chat1():
 
 @pytest.mark.asyncio
 async def test_agent_chat2():
-    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/chat_agent", json={
             "query": "地球距离太阳多远？", "stream": False, "conversation_id": "test_agent"
         })
@@ -85,7 +85,7 @@ async def test_agent_chat2():
 
 @pytest.mark.asyncio
 async def test_agent_chat3():
-    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/chat_agent", json={
             "query": "最近7天告警情况如何", "stream": False, "conversation_id": "test_agent"
         })
@@ -95,7 +95,7 @@ async def test_agent_chat3():
 
 @pytest.mark.asyncio
 async def test_unified_chat():
-    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/chat/unified_chat", json={
             "query": "地球距离太阳多远", "stream": False,
             "conversation_id": "c1", "file_id": ""
@@ -107,7 +107,7 @@ async def test_unified_chat():
 @pytest.mark.asyncio
 async def test_unified_chat_with_file():
     import os
-    async with httpx.AsyncClient(base_url=BASE, timeout=300) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         # 上传当前目录下的真实 PDF 文件
         assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
         with open(PDF_PATH, "rb") as f:

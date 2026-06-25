@@ -16,7 +16,7 @@ with open(_config_path, "r", encoding="utf-8") as f:
     _config = yaml.safe_load(f)
 
 BASE = _config["server"]["base_url"]
-TIMEOUT = _config["server"].get("timeout", 120)
+TIMEOUT = _config["server"].get("timeout", TIMEOUT)
 PDF_NAME = "页面提取自－草台第一分散式电站电力监控系统二次安全防护实施方案.pdf"
 PDF_PATH = os.path.join(os.path.dirname(__file__),"data", PDF_NAME)
 # ==================== 全局变量 ====================
@@ -33,7 +33,7 @@ _file_name = None
 async def test_upload_contract_with_pdf():
     """上传合同PDF文件，保存 contract_id / task_id / file_path"""
     global _contract_id, _task_id, _file_path, _file_name
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(PDF_PATH, "rb") as f:
             r = await c.post(
                 "/api/upload",
@@ -59,7 +59,7 @@ async def test_pdf_pages():
     """获取PDF页面信息"""
     if not _file_path:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/api/pdf_pages", json={"filepath": _file_path})
     assert r.status_code == 200
     resp = r.json()
@@ -76,7 +76,7 @@ async def test_task_status_polling():
     if not _task_id:
         pytest.skip("前置上传失败，跳过")
 
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         max_attempts = 60
         for i in range(max_attempts):
             r = await c.get(f"/api/task/status/{_task_id}")
@@ -100,7 +100,7 @@ async def test_get_audit_result():
     """获取审计结果（合同字段提取）"""
     if not _contract_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/api/get_audit_result", json={
             "contract_id": _contract_id,
             "task_id": _task_id,
@@ -118,7 +118,7 @@ async def test_get_audit_results_by_task():
     """根据 task_id 查询审计结果"""
     if not _task_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get(f"/api/audit-results/task/{_task_id}")
     assert r.status_code == 200
     resp = r.json()
@@ -129,7 +129,7 @@ async def test_get_audit_results_by_task():
 @pytest.mark.order(5)
 async def test_get_audit_results_not_found():
     """查询不存在的 task_id 审计结果"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/audit-results/task/99999")
     assert r.status_code == 200
     print(f"[get_audit_results_not_found] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -141,7 +141,7 @@ async def test_get_audit_results_not_found():
 @pytest.mark.order(6)
 async def test_list_contracts():
     """获取合同列表"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/contracts/list")
     assert r.status_code == 200
     resp = r.json()
@@ -153,7 +153,7 @@ async def test_list_contracts():
 @pytest.mark.order(6)
 async def test_list_contracts_with_pagination():
     """获取合同列表（带分页）"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/contracts/list", params={"limit": 5, "offset": 0})
     assert r.status_code == 200
     print(f"[list_contracts_with_pagination] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -165,7 +165,7 @@ async def test_get_contract_detail():
     """查询刚上传的合同详情"""
     if not _contract_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get(f"/api/contracts/detail/{_contract_id}")
     assert r.status_code == 200
     print(f"[get_contract_detail] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -175,7 +175,7 @@ async def test_get_contract_detail():
 @pytest.mark.order(6)
 async def test_get_contract_detail_not_found():
     """查询不存在的合同"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/contracts/detail/99999")
     assert r.status_code == 200
     print(f"[get_contract_detail_not_found] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -185,7 +185,7 @@ async def test_get_contract_detail_not_found():
 @pytest.mark.order(6)
 async def test_delete_contract_not_found():
     """删除不存在的合同"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/api/contracts/delete/99999")
     assert r.status_code == 200
     print(f"[delete_contract_not_found] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -197,7 +197,7 @@ async def test_delete_contract_not_found():
 @pytest.mark.order(7)
 async def test_list_tasks():
     """查看任务列表"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/tasks")
     assert r.status_code == 200
     resp = r.json()
@@ -209,7 +209,7 @@ async def test_list_tasks():
 @pytest.mark.order(7)
 async def test_list_tasks_with_pagination():
     """查看任务列表（带分页）"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/tasks", params={"limit": 5, "offset": 0})
     assert r.status_code == 200
     print(f"[list_tasks_with_pagination] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -221,7 +221,7 @@ async def test_get_task():
     """查询刚创建的任务"""
     if not _task_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get(f"/api/tasks/{_task_id}")
     assert r.status_code == 200
     print(f"[get_task] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -233,7 +233,7 @@ async def test_get_task_by_contract():
     """查询合同对应的任务"""
     if not _contract_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get(f"/api/tasks/contract/{_contract_id}")
     assert r.status_code == 200
     print(f"[get_task_by_contract] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -243,7 +243,7 @@ async def test_get_task_by_contract():
 @pytest.mark.order(7)
 async def test_get_task_not_found():
     """查询不存在的任务"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.get("/api/tasks/99999")
     assert r.status_code == 200
     print(f"[get_task_not_found] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -253,7 +253,7 @@ async def test_get_task_not_found():
 @pytest.mark.order(7)
 async def test_reprocess_contract_not_found():
     """重新处理不存在的合同"""
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/api/tasks/reprocess/99999")
     assert r.status_code == 200
     print(f"[reprocess_contract_not_found] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -267,7 +267,7 @@ async def test_delete_task():
     """删除刚创建的任务"""
     if not _task_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post(f"/api/tasks/delete/{_task_id}")
     assert r.status_code == 200
     print(f"[delete_task] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -279,7 +279,7 @@ async def test_delete_contract():
     """删除刚上传的合同"""
     if not _contract_id:
         pytest.skip("前置上传失败，跳过")
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post(f"/api/contracts/delete/{_contract_id}")
     assert r.status_code == 200
     print(f"[delete_contract] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")

@@ -16,7 +16,7 @@ TIMEOUT = _config["server"].get("timeout", 120)
 
 @pytest.mark.asyncio
 async def test_associate_device():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/ticket/associate_device", json={
             "maintenance_object": "叶家河光储正向隔离装置",
             "affected_object": "叶家河光储正向隔离装置",
@@ -30,7 +30,7 @@ async def test_associate_device():
 
 @pytest.mark.asyncio
 async def test_associate_device_not_substation():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/ticket/associate_device", json={
             "maintenance_object": "加密装置",
             "affected_object": "加密装置",

@@ -16,7 +16,7 @@ TIMEOUT = _config["server"].get("timeout", 120)
 
 @pytest.mark.asyncio
 async def test_platform_warning():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/warning_handle/warning", json={
             "IP": "40.101.37.2",
             "destinationIp": "未知设备",

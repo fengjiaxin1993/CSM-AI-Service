@@ -21,7 +21,7 @@ PDF_PATH = os.path.join(os.path.dirname(__file__),"data", PDF_NAME)
 @pytest.mark.asyncio
 async def test_extract_safe_table():
     assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(PDF_PATH, "rb") as f:
             files = {"file": (PDF_NAME, f, "application/pdf")}
             r = await c.post("/parse_pdf/extract_safe_table", files=files)
@@ -32,7 +32,7 @@ async def test_extract_safe_table():
 @pytest.mark.asyncio
 async def test_extract_dbcp_info():
     assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(PDF_PATH, "rb") as f:
             files = {"file": (PDF_NAME, f, "application/pdf")}
             r = await c.post("/parse_pdf/extract_dbcp_info", files=files)
@@ -43,7 +43,7 @@ async def test_extract_dbcp_info():
 @pytest.mark.asyncio
 async def test_extract_safe_split_table():
     assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(PDF_PATH, "rb") as f:
             files = {"file": (PDF_NAME, f, "application/pdf")}
             r = await c.post("/parse_pdf/extract_safe_split_table", files=files)

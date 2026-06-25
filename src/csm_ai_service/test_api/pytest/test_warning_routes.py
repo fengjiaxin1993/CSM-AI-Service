@@ -27,7 +27,7 @@ JPG_PATH = os.path.join(os.path.dirname(__file__),"data", JPG_NAME)
 @pytest.mark.order(1)
 async def test_warning_analyze1():
     assert os.path.exists(DOCX_PATH), f"测试文件不存在: {DOCX_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(DOCX_PATH, "rb") as f:
             files = {"file": (DOCX_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
             data = {"warning_number": "warning_001"}
@@ -41,7 +41,7 @@ async def test_warning_analyze1():
 @pytest.mark.order(2)
 async def test_save_warning_report1():
     assert os.path.exists(DOCX_PATH), f"测试文件不存在: {DOCX_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(DOCX_PATH, "rb") as f:
             files = {"file": (DOCX_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
             data = {"warning_number": "warning_001"}
@@ -53,7 +53,7 @@ async def test_save_warning_report1():
 @pytest.mark.asyncio
 @pytest.mark.order(3)
 async def test_delete_warning_report1():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/warning/delete_warning_report", json="warning_001")
     assert r.status_code == 200
     print(f"[delete_warning_report] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -63,7 +63,7 @@ async def test_delete_warning_report1():
 @pytest.mark.order(4)
 async def test_warning_analyze2():
     assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(PDF_PATH, "rb") as f:
             files = {"file": (PDF_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
             data = {"warning_number": "warning_002"}
@@ -77,7 +77,7 @@ async def test_warning_analyze2():
 @pytest.mark.order(5)
 async def test_save_warning_report2():
     assert os.path.exists(PDF_PATH), f"测试文件不存在: {PDF_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(PDF_PATH, "rb") as f:
             files = {"file": (DOCX_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
             data = {"warning_number": "warning_002"}
@@ -89,7 +89,7 @@ async def test_save_warning_report2():
 @pytest.mark.asyncio
 @pytest.mark.order(6)
 async def test_delete_warning_report2():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/warning/delete_warning_report", json="warning_002")
     assert r.status_code == 200
     print(f"[delete_warning_report] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -100,7 +100,7 @@ async def test_delete_warning_report2():
 @pytest.mark.order(7)
 async def test_warning_analyze3():
     assert os.path.exists(JPG_PATH), f"测试文件不存在: {JPG_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(JPG_PATH, "rb") as f:
             files = {"file": (JPG_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
             data = {"warning_number": "warning_003"}
@@ -114,7 +114,7 @@ async def test_warning_analyze3():
 @pytest.mark.order(8)
 async def test_save_warning_report3():
     assert os.path.exists(JPG_PATH), f"测试文件不存在: {JPG_PATH}"
-    async with httpx.AsyncClient(base_url=BASE, timeout=120) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         with open(JPG_PATH, "rb") as f:
             files = {"file": (JPG_NAME, f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
             data = {"warning_number": "warning_003"}
@@ -126,7 +126,7 @@ async def test_save_warning_report3():
 @pytest.mark.asyncio
 @pytest.mark.order(9)
 async def test_delete_warning_report3():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/warning/delete_warning_report", json="warning_003")
     assert r.status_code == 200
     print(f"[delete_warning_report] 响应: {json.dumps(r.json(), ensure_ascii=False, indent=2)}")
@@ -136,7 +136,7 @@ async def test_delete_warning_report3():
 
 @pytest.mark.asyncio
 async def test_generate_notice_doc():
-    async with httpx.AsyncClient(base_url=BASE, timeout=60) as c:
+    async with httpx.AsyncClient(base_url=BASE, timeout=TIMEOUT) as c:
         r = await c.post("/warning/generate_notice_doc", json={
             "notice_no": "WLAQ2026021001",
             "receive": "湖北宜昌地调",

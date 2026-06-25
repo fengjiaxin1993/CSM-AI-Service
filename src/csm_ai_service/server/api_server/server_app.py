@@ -130,22 +130,21 @@ def create_app():
 
 
 def run_api(host, port, **kwargs):
+    _app = create_app()
     if kwargs.get("ssl_keyfile") and kwargs.get("ssl_certfile"):
         uvicorn.run(
-            app,
+            _app,
             host=host,
             port=port,
             ssl_keyfile=kwargs.get("ssl_keyfile"),
             ssl_certfile=kwargs.get("ssl_certfile"),
         )
     else:
-        uvicorn.run(app, host=host, port=port)
-
-
-app = create_app()
+        uvicorn.run(_app, host=host, port=port)
 
 
 if __name__ == "__main__":
+    app = create_app()
     parser = argparse.ArgumentParser(
         prog="langchain-ChatGLM",
         description="About langchain-ChatGLM, local knowledge based ChatGLM with langchain"

@@ -1,4 +1,8 @@
 # Apply pathlib patches before any other imports to fix WindowsPath issues
+import multiprocessing as mp
+import sys
+if sys.platform == "win32":
+    mp.set_start_method("spawn", force=True)
 import uvicorn
 import logging
 from csm_ai_service.utils import build_logger
@@ -32,7 +36,7 @@ def run_api_server():
         1024 * 1024 * 1024 * 3,
     )
     logging.config.dictConfig(logging_conf)  # type: ignore
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 @click.command(help="启动服务")
