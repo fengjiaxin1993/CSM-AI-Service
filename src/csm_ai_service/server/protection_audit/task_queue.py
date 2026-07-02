@@ -23,10 +23,10 @@ from csm_ai_service.server.db.repository import list_audit_rules
 from csm_ai_service.server.protection_audit.tools.file_tools import save_ocr_result, load_cached_ocr_result, ensure_cache_dir
 from csm_ai_service.server.protection_audit.audit.audit_graph import AuditRule, GLOBAL_AUDIT_GRAPH
 from csm_ai_service.settings import Settings
-from csm_ai_service.server.utils import build_logger
 from csm_ai_service.server.db.repository import init_default_rules
 from csm_ai_service.server.protection_audit.pdf_extract_service import process_file_ocr_by_path
 
+from csm_ai_service.server.utils import build_logger
 logger = build_logger()
 
 class TaskWorker:
@@ -171,34 +171,40 @@ class TaskWorker:
         update_task(task_id, audit_status="processing")
 
         t0 = datetime.now()
-        try:
+
+        rules = list_audit_rules()
+        if not rules:
+            init_default_rules()
             rules = list_audit_rules()
-            if not rules:
-                init_default_rules()
-                rules = list_audit_rules()
-                logger.info(f"创建默认审计规则")
-            logger.info(f"[Task {task_id}] 使用 {len(rules)} 条审计规则")
+            logger.info(f"创建默认审计规则")
+        # 只使用已启用的规则进行审计
+        rules = [r for r in rules if r.get("is_enabled", True)]
+        logger.info(f"[Task {task_id}] 使用 {len(rules)} 条已启用的审计规则")
 
-            result_ids = batch_add_audit_results(task_id, contract_id, rules)
+        result_ids = batch_add_audit_results(task_id, contract_id, rules)
+        # 构建 rule_id -> result_id 映射，保证与并行审计结果通过rule_id匹配而非依赖索引顺序
+        rule_id_to_result_id = {r["id"]: result_ids[i] for i, r in enumerate(rules)}
 
 
-            # 不用走审计流程了，因为ocr没识别出来
-            if len(ocr_result.get("markdown_text", "")) <= Settings.basic_settings.OCR_MIN_TEXT_LENGTH:
-                for rid in result_ids:
-                    update_audit_result(
-                        rid,
-                        conclusion="无法识别上传的合同文件，无法进行审计",
-                        reasoning="由于客观因素，暂不支持识别扫描件",
-                    )
-            else:
-                audit_rules = [
-                    AuditRule(id=r["id"], name=r["name"],
-                              description=r.get("description", ""),
-                              chapter_keywords=r.get("chapter_keywords", []),
-                              judge_logic=r.get("judge_logic", ""))
-                    for r in rules
-                ]
-                graph = GLOBAL_AUDIT_GRAPH
+        # 不用走审计流程了，因为ocr没识别出来
+        if len(ocr_result.get("markdown_text", "")) <= Settings.basic_settings.OCR_MIN_TEXT_LENGTH:
+            for rid in result_ids:
+                update_audit_result(
+                    rid,
+                    conclusion="无法识别上传的合同文件，无法进行审计",
+                    reasoning="由于客观因素，暂不支持识别扫描件",
+                )
+        else:
+            audit_rules = [
+                AuditRule(id=r["id"], name=r["name"],
+                          description=r.get("description", ""),
+                          chapter_keywords=r.get("chapter_keywords", []),
+                          judge_logic=r.get("judge_logic", ""))
+                for r in rules
+            ]
+            graph = GLOBAL_AUDIT_GRAPH
+            graph_exc = None
+            try:
                 res = graph.invoke({
                     "contract_id": contract_id,
                     "contract_markdown_json": ocr_result.get("structure_json_result", {}),
@@ -207,10 +213,16 @@ class TaskWorker:
                     "final_report": "",
                 })
                 single_results = res.get("single_rule_results", [])
-                for i, rid in enumerate(result_ids):
-                    if i >= len(single_results):
-                        break
-                    r = single_results[i]
+            except Exception as exc:
+                logger.error(f"[Task {task_id}] graph.invoke调用失败: {exc}")
+                graph_exc = exc
+                single_results = []
+
+            # 用 rule_id 匹配，而非索引顺序，确保并行审计结果与DB记录严格一致
+            result_by_rule_id = {r.rule_id: r for r in single_results}
+            for rule_id, rid in rule_id_to_result_id.items():
+                r = result_by_rule_id.get(rule_id)
+                if r is not None:
                     update_audit_result(
                         rid,
                         rule_name=r.rule_name,
@@ -224,21 +236,25 @@ class TaskWorker:
                         related_text=getattr(r, 'related_text', ""),
                         related_doc_ids=getattr(r, 'related_doc_ids', []),
                     )
+                else:
+                    # graph调用失败或某规则结果缺失，标记为待人工审核
+                    rule = next((ru for ru in rules if ru["id"] == rule_id), {})
+                    update_audit_result(
+                        rid,
+                        rule_name=rule.get("name", ""),
+                        rule_description=rule.get("description", ""),
+                        rule_judge_logic=rule.get("judge_logic", ""),
+                        is_compliant=False,
+                        conclusion="大模型调用失败，请人工审核",
+                        reasoning=f"审计任务异常: {type(graph_exc).__name__}: {graph_exc}" if graph_exc else "审计结果缺失，请人工审核",
+                        related_chapters=rule.get("chapter_keywords", []),
+                    )
 
             t1 = datetime.now()
             update_task(
                 task_id, status="completed", audit_status="done", audit_start_time=t0, audit_end_time=t1
             )
             logger.info(f"[Task {task_id}] 审计完成，耗时: {(t1 - t0).total_seconds():.1f}s")
-
-        except Exception as e:
-            t1 = datetime.now()
-            update_task(
-                task_id, status="failed", audit_status="failed",
-                error_message=f"审计阶段失败: {e}",
-                audit_start_time=t0, audit_end_time=t1,
-            )
-            raise
 
 
 # ==================== 全局实例 ====================

@@ -45,6 +45,7 @@ def add_audit_rule(
     description: str = "",
     chapter_keywords: list = None,
     judge_logic: str = "",
+    is_enabled: bool = True,
 ) -> int:
     """
     新增审计规则，返回自增ID
@@ -56,6 +57,7 @@ def add_audit_rule(
         description=description,
         chapter_keywords=chapter_keywords,
         judge_logic=judge_logic,
+        is_enabled=is_enabled,
     )
     session.add(m)
     session.commit()
@@ -76,6 +78,7 @@ def get_audit_rule_by_id(session, rule_id: int) -> Optional[dict]:
         "description": r.description,
         "chapter_keywords": r.chapter_keywords,
         "judge_logic": r.judge_logic,
+        "is_enabled": r.is_enabled if r.is_enabled is not None else True,
         "create_time": r.create_time.strftime("%Y-%m-%d %H:%M:%S") if r.create_time else None,
         "update_time": r.update_time.strftime("%Y-%m-%d %H:%M:%S") if r.update_time else None,
     }
@@ -105,6 +108,7 @@ def list_audit_rules(
             "description": r.description,
             "chapter_keywords": r.chapter_keywords,
             "judge_logic": r.judge_logic,
+            "is_enabled": r.is_enabled if r.is_enabled is not None else True,
             "create_time": r.create_time.strftime("%Y-%m-%d %H:%M:%S") if r.create_time else None,
             "update_time": r.update_time.strftime("%Y-%m-%d %H:%M:%S") if r.update_time else None,
         })
@@ -119,6 +123,7 @@ def update_audit_rule(
     description: str = None,
     chapter_keywords: list = None,
     judge_logic: str = None,
+    is_enabled: bool = None,
 ) -> bool:
     """
     更新审计规则（只更新传入的非None字段）
@@ -134,6 +139,8 @@ def update_audit_rule(
         m.chapter_keywords = chapter_keywords
     if judge_logic is not None:
         m.judge_logic = judge_logic
+    if is_enabled is not None:
+        m.is_enabled = is_enabled
     session.add(m)
     session.commit()
     return True
@@ -201,6 +208,7 @@ def init_default_rules(session) -> dict:
                 description=rule_data["description"],
                 chapter_keywords=rule_data["chapter_keywords"],
                 judge_logic=rule_data["judge_logic"],
+                is_enabled=True,
             )
             session.add(m)
             created += 1

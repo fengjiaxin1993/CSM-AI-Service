@@ -34,6 +34,7 @@ async def create_rule(rule: AuditRuleCreate):
             description=rule.description,
             chapter_keywords=rule.chapter_keywords,
             judge_logic=rule.judge_logic,
+            is_enabled=rule.is_enabled,
         )
         return ApiResponse(success=True, message="规则创建成功", data={"id": rule_id})
     except Exception as e:
@@ -78,6 +79,7 @@ async def modify_rule(rule_id: int, rule: AuditRuleUpdate):
             description=rule.description,
             chapter_keywords=rule.chapter_keywords,
             judge_logic=rule.judge_logic,
+            is_enabled=rule.is_enabled,
         )
         if success:
             return ApiResponse(success=True, message="规则更新成功")

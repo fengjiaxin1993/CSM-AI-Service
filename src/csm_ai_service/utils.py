@@ -8,6 +8,10 @@ import loguru._logger
 from csm_ai_service.settings import Settings
 
 
+# 记录已经添加过的sink，避免重复添加导致同一日志被多次写入
+_logger_added_sinks: set = set()
+
+
 def build_logger(log_file: str = "chatchat"):
     """
     build a logger with colorized output and a log file, for example:
@@ -25,7 +29,9 @@ def build_logger(log_file: str = "chatchat"):
             log_file = f"{log_file}.log"
         if not os.path.isabs(log_file):
             log_file = str((Settings.basic_settings.LOG_PATH / log_file).resolve())
-        logger.add(log_file, colorize=False)
+        if log_file not in _logger_added_sinks:
+            _logger_added_sinks.add(log_file)
+            logger.add(log_file, colorize=False)
 
     # 注意：不要替换 logger.error，否则传入异常对象时会报错
     # 如需记录异常，请使用 logger.exception(msg) 或 logger.error(msg, exc_info=True)

@@ -10,7 +10,8 @@ from typing import List, Annotated
 from csm_ai_service.server.protection_audit.audit.model import AuditRule, RuleAuditResult
 from csm_ai_service.server.utils import get_ChatOpenAI, fix_llm_json_output
 from csm_ai_service.settings import Settings
-
+from csm_ai_service.server.utils import build_logger
+logger = build_logger()
 
 # ====================== 全局配置：LLM最大并发控制 ======================
 llm_semaphore = threading.Semaphore(Settings.basic_settings.MAX_CONCURRENT_AUDIT_LLM)  # 全局信号量，全任务共享
@@ -49,13 +50,15 @@ def get_related_text(contract_json: dict, chapter_list: List[str]):
     return "\n---\n".join(res), doc_ids
 
 
+
 # ====================== 内部：单规则真实LLM调用（被限流） ======================
 def llm_audit_single(rule: AuditRule, contract_markdown_json: dict, contract_id: int = 0) -> RuleAuditResult:
-    """被信号量限流的真实LLM请求函数"""
+    """被信号量限流的真实LLM请求函数，LLM调用失败时返回待人工审核的结果"""
     related_text, doc_ids = get_related_text(contract_markdown_json, rule.chapter_keywords)
 
-    with llm_semaphore:  # 进入自动占用令牌，超出MAX则阻塞排队
-        prompt = f"""
+    try:
+        with llm_semaphore:  # 进入自动占用令牌，超出MAX则阻塞排队
+            prompt = f"""
 请基于合同内容和审计规则做合规审查，合同正文中可能有markdown格式的表格数据,只返回JSON，禁止多余内容。
 【合同相关内容】
 {related_text}
@@ -71,19 +74,35 @@ def llm_audit_single(rule: AuditRule, contract_markdown_json: dict, contract_id:
     "origin_text": "从原文中找出相关的内容,一定是合同相关内容中的原文"
 }}}}
 """
-        resp = llm.invoke(prompt)
-        res_dict = fix_llm_json_output(resp.content)
+            resp = llm.invoke(prompt)
+            res_dict = fix_llm_json_output(resp.content)
+            return RuleAuditResult(
+                contract_id=contract_id,
+                rule_id=rule.id,
+                rule_name=rule.name,
+                rule_description=rule.description,
+                rule_judge_logic=rule.judge_logic,
+                is_compliant=res_dict.get("is_compliant", False),
+                conclusion=res_dict.get("conclusion", "大模型解析后，提取结论失败，请人工审核"),
+                reasoning=res_dict.get("reasoning", "大模型解析后，提取原因失败，请人工分析"),
+                related_text=related_text,
+                origin_text=res_dict.get("origin_text", ""),
+                related_chapters=rule.chapter_keywords,
+                related_doc_ids=doc_ids
+            )
+    except Exception as e:
+        logger.error(f"LLM调用失败(规则: {rule.name}, contract_id: {contract_id}): {e}")
         return RuleAuditResult(
             contract_id=contract_id,
             rule_id=rule.id,
             rule_name=rule.name,
             rule_description=rule.description,
             rule_judge_logic=rule.judge_logic,
-            is_compliant=res_dict["is_compliant"],
-            conclusion=res_dict["conclusion"],
-            reasoning=res_dict["reasoning"],
+            is_compliant=False,
+            conclusion=f"大模型调用失败，请人工审核",
+            reasoning=f"大模型调用异常，请人工分析，异常类型为 {type(e).__name__}",
             related_text=related_text,
-            origin_text=res_dict["origin_text"],
+            origin_text="",
             related_chapters=rule.chapter_keywords,
             related_doc_ids=doc_ids
         )
@@ -99,11 +118,11 @@ def split_audit_tasks(state: AuditState):
 
 
 def single_rule_audit(data: dict):
-    """LangGraph子节点：提交任务到受限线程池"""
+    """LangGraph子节点：提交任务到受限线程池，失败时返回待人工审核的结果"""
     rule: AuditRule = data["rule"]
     contract_markdown_json = data["contract_markdown_json"]
     contract_id = data.get("contract_id", 0)
-    # 提交到带并发上限的线程池执行LLM
+
     future = executor.submit(llm_audit_single, rule, contract_markdown_json, contract_id)
     result = future.result()
     return {"single_rule_results": [result]}

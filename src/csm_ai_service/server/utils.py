@@ -322,12 +322,14 @@ class AuditRuleCreate(BaseModel):
     description: str = Field(default="", description="规则详细描述")
     chapter_keywords: List[str] = Field(default=[], description="相关章节关键词列表")
     judge_logic: str = Field(default="", description="判断逻辑")
+    is_enabled: bool = Field(default=True, description="是否启用")
 
 class AuditRuleUpdate(BaseModel):
     name: Optional[str] = Field(default=None, description="规则名称")
     description: Optional[str] = Field(default=None, description="规则详细描述")
     chapter_keywords: Optional[List[str]] = Field(default=None, description="相关章节关键词列表")
     judge_logic: Optional[str] = Field(default=None, description="判断逻辑")
+    is_enabled: Optional[bool] = Field(default=None, description="是否启用")
 
 class AuditRuleResponse(BaseModel):
     id: int
@@ -335,6 +337,7 @@ class AuditRuleResponse(BaseModel):
     description: str
     chapter_keywords: List[str]
     judge_logic: str
+    is_enabled: bool
     create_time: Optional[str]
     update_time: Optional[str]
 
@@ -700,6 +703,10 @@ def fix_llm_json_output(bad_json_str: str) -> dict:
     """
     if not bad_json_str or not isinstance(bad_json_str, str):
         return {}
+
+    # DeepSeek推理模型输出可能包含<think>推理内容，实际JSON在</think>之后
+    if '</think>' in bad_json_str:
+        bad_json_str = bad_json_str[bad_json_str.index('</think>') + len('</think>'):]
 
     # 第一步：清理特殊字符
     cleaned_str = bad_json_str.strip()
