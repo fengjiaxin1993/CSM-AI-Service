@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "icdo"
-version = "1.2.3"
+version = "1.2.4"
 description = "ICDO智能问答助手服务"
 authors = ["feng jiaxin"]
 readme = "README.md"
