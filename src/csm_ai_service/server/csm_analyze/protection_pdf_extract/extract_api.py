@@ -298,18 +298,22 @@ def remove_digit_str(str):
     return ''.join([i for i in str if not i.isdigit()])
 
 
-standard_column_names = ["问题描述", "风险等级", "安全类型", "关联资产"]
+standard_column_names = ["问题描述", "风险等级", "安全类型", "关联资产", "关联威胁", "危害分析结果"]
 match_dict = {
     "content": ["安全问题", "问题描述"],
     "riskLevel": ["风险等级"],
     "securityType": ["安全类", "安全类型", "安全层面"],
-    "evaluationObject": ["关联资产"]
+    "evaluationObject": ["关联资产"],
+    "relatedThreat": ["关联威胁"],
+    "harmAnalysis": ["危害分析结果","危害分析"]
 }
 empty_return_dic = {
     "content": "",
     "riskLevel": 0,
     "securityType": 0,
-    "evaluationObject": ""
+    "evaluationObject": "",
+    "relatedThreat": "",
+    "harmAnalysis": ""
 }
 
 empty_table_list = [[]]

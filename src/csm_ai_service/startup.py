@@ -1,26 +1,23 @@
-# Apply pathlib patches before any other imports to fix WindowsPath issues
-import multiprocessing as mp
-import sys
-if sys.platform == "win32":
-    mp.set_start_method("spawn", force=True)
-import uvicorn
+# startup.py - API 服务启动模块
+# 注意：所有重型依赖（server_app, task_queue 等）都在函数内部延迟导入，
+# 避免在模块导入阶段就触发 create_engine、LLM 实例化、LangGraph 编译等操作。
 import logging
 from csm_ai_service.utils import build_logger
-import click
-from csm_ai_service.settings import Settings
-from csm_ai_service.server.api_server.server_app import create_app
-from csm_ai_service.server.utils import set_httpx_config
+
 logger = build_logger()
 
 
 def run_api_server():
+    """启动 API 服务 — 所有重型依赖在函数内部延迟导入"""
+    import uvicorn
     from csm_ai_service.utils import (
         get_config_dict,
         get_log_file,
         get_timestamp_ms,
     )
-
-
+    from csm_ai_service.settings import Settings
+    from csm_ai_service.server.api_server.server_app import create_app
+    from csm_ai_service.server.utils import set_httpx_config
 
     logger.info(f"Api MODEL_PLATFORMS: {Settings.model_settings.MODEL_PLATFORMS}")
     set_httpx_config()
@@ -39,10 +36,7 @@ def run_api_server():
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
-@click.command(help="启动服务")
-def main():
-    run_api_server()
 
 
 if __name__ == "__main__":
-    main()
+    run_api_server()
