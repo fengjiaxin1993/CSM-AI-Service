@@ -41,8 +41,7 @@ def generate_rectification_notice_doc(
                 "disposal_suggest": "1. 立即关闭默认高危端口3389；\n2. 修改管理员为强密码（8位以上字母+数字+特殊符号）；\n3. 开启终端日志审计并配置远程上报；\n4. "
                                     "对运维人员开展网络安全专项培训",
                 # 处置建议
-                "deadline": "2026年02月20日",  # 整改截止日期
-                "contact_tel": "027-8866XXXX",  # 省调联系电话
+                "rectification_requirements": "整改要求",  # 整改截止日期
                 "cur_date": "2026年02月01日"  # 通知单发布日期
             }
         )
