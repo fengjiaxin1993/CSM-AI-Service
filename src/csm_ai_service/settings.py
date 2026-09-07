@@ -88,6 +88,12 @@ class BasicSettings(BaseFileSettings):
         return p
 
     @cached_property
+    def WARNING_REPORT_DIR(self) -> Path:
+        """存储告警处置报告"""
+        p = self.DATA_PATH / "warning_report"
+        return p
+
+    @cached_property
     def WARNING_NOTICE_DIR(self) -> Path:
         """整改通知单路径"""
         p = self.DATA_PATH / "warning_notice"
@@ -101,6 +107,9 @@ class BasicSettings(BaseFileSettings):
 
     WARNING_NOTICE_PATH: str = str(CHATCHAT_ROOT / "data/warning_notice")
     """记录存储告警整改通知单的目录"""
+
+    WARNING_REPORT_PATH: str = str(CHATCHAT_ROOT / "data/warning_report")
+    """记录存储告警处置报告的目录"""
 
     DB_ROOT_PATH: str = str(CHATCHAT_ROOT / "data/knowledge_base/info.db")
     """数据库默认存储路径。如果使用sqlite，可以直接修改DB_ROOT_PATH；如果使用其它数据库，请直接修改SQLALCHEMY_DATABASE_URI。"""
@@ -160,6 +169,7 @@ class BasicSettings(BaseFileSettings):
         Path(self.KB_ROOT_PATH).mkdir(parents=True, exist_ok=True)
         Path(self.USER_ROOT_PATH).mkdir(parents=True, exist_ok=True)
         Path(self.WARNING_NOTICE_PATH).mkdir(parents=True, exist_ok=True)
+        Path(self.WARNING_REPORT_PATH).mkdir(parents=True, exist_ok=True)
 
 
 
@@ -192,7 +202,7 @@ class KBSettings(BaseFileSettings):
     OVERLAP_SIZE: int = 150
     """知识库中相邻文本重合长度(不适用MarkdownHeaderTextSplitter)"""
 
-    VECTOR_SEARCH_TOP_K: int = 5
+    VECTOR_SEARCH_TOP_K: int = 3
     """知识库匹配向量数量"""
 
     SCORE_THRESHOLD: float = 0.2
@@ -434,17 +444,12 @@ class PromptSettings(BaseFileSettings):
     }
     '''告警电力解析提示词'''
     warning: dict = {
-        "analyze": (
-            "你是电力行业告警处置报告审核专家，严格遵循《电力监控系统安全防护规定》《网络安全法》，审核以下报告:\n"
-            "【研判维度】\n"
-            "1. 内容完整性，包括原因分析、整改结果、设备信息、故障排查过程、是否全面排查"
-            "2. 处置合规性：处置步骤是否清晰可追溯，处置结果是否明确\n"
-            "3. 原因分析有效性：原因是否明确，内容是否符合逻辑\n"
-            "4. 整改闭环：整改措施具体可执行\n"
-            "5. 如果严重违规的告警，是否按照四不放过原则进行分析和整改(事故原因未查清不放过、责任人员未处理不放过、整改措施未落实不放过、有关人员未受到教育不放过),"
-            "如果没有严格按照四不放过原则进行分析和整改，则直接驳回\n"
-            "6. 历史一致性：与同类告警处置方案无矛盾，差异需说明合理原因\n\n"
-            "【同类电力告警参考】\n"
+        "analyze_high_risk": (
+            "你是电力行业告警处置报告审核专家，本次告警为【高危告警】（如445端口、违规外联、3389端口、病毒、互联网地址访问等），\n"
+            "需严格审查，尤其关注四不放过原则：事故原因是否查清、责任人员是否处理、整改措施是否落实并附佐证、有关人员是否受到教育。结合规则以及历史相似处置报告(历史处置报告作为参考)，严格审核告警处置报告:\n"
+            "【研判规则】\n"
+            "{{rules_info}}\n\n"
+            "【历史相似告警处置报告参考】\n"
             "{{retrieved_info}}\n\n"
             "【本次待审核报告】\n"
             "{{report_info}}\n\n"
@@ -456,15 +461,38 @@ class PromptSettings(BaseFileSettings):
             "5. reject_reason：驳回时填写具体修改意见，否则为空字符串。\n"
             "6. power_suggestion：给出电力行业针对性优化与防范建议。\n"
             "7. 字段名称、结构、引号必须完全一致。\n\n"
-            "【返回JSON结构】"
-            "{"
+            "【返回JSON结构】\n"
+            "{\n"
             "'audit_result': '',\n"
             "'audit_details': '',\n"
             "'summary': '',\n"
             "'reject_reason': '',\n"
             "'power_suggestion': ''\n"
             "} "),
-
+        "analyze_normal": (
+            "你是电力行业告警处置报告审核专家，本次告警为【普通告警】，审查标准适度简化，重点关注内容完整性和逻辑一致性即可，结合规则以及历史相似处置报告，不要输出无效信息，审核告警处置报告:\n"
+            "【研判规则】\n"
+            "{{rules_info}}\n\n"
+            "【历史相似告警处置报告参考】\n"
+            "{{retrieved_info}}\n\n"
+            "【本次待审核报告】\n"
+            "{{report_info}}\n\n"
+            "【输出要求】\n"
+            "1. 严格按以下 JSON 输出，禁止多余文字、解释、标点外内容。\n"
+            "2. audit_result 只能是：通过 / 驳回 / 需人工复核。\n"
+            "3. audit_details：必须详细逐条对照研判维度说明审核情况，写明合规点、问题点、缺失内容，180字左右。\n"
+            "4. summary：详细总结本次告警的基本情况、处置过程、存在问题，120字左右。\n"
+            "5. reject_reason：驳回时填写具体修改意见，否则为空字符串。\n"
+            "6. power_suggestion：给出电力行业针对性优化与防范建议。\n"
+            "7. 字段名称、结构、引号必须完全一致。\n\n"
+            "【返回JSON结构】\n"
+            "{\n"
+            "'audit_result': '',\n"
+            "'audit_details': '',\n"
+            "'summary': '',\n"
+            "'reject_reason': '',\n"
+            "'power_suggestion': ''\n"
+            "} "),
         "extract": (
             "你是专业的信息抽取助手。请从下面的【Word识别文本】和【Word识别表格】中，严格按照要求抽取结构化信息，只返回标准JSON。\n"
             "【抽取规则】\n"
@@ -482,7 +510,6 @@ class PromptSettings(BaseFileSettings):
             "{"
             "'报告标题': '',"
             "'告警信息': '',"
-            "'告警是否违规': '',"
             "'设备名称': '',"
             "'设备类型': '',"
             "'告警时间': '',"
@@ -492,9 +519,9 @@ class PromptSettings(BaseFileSettings):
             "'责任人员和责任单位处理': '',"
             "'人员教育培训': '',"
             "'整改情况': '',"
-            "'防范措施': ''"
+            "'防范措施': '',"
+            "'佐证材料': ''"
             "}"
-
         )
     }
 

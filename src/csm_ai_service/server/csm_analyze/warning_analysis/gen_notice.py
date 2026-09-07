@@ -19,7 +19,7 @@ REQUIRED_FIELDS = [
     "warning_time", "warning_unit", "monitor_device", "warning_level",
     "latest_time", "device_ip", "content",
     "reason_analysis", "disposal_suggest",
-    "deadline", "contact_tel", "cur_date"
+    "rectification_requirements", "cur_date"
 ]
 
 

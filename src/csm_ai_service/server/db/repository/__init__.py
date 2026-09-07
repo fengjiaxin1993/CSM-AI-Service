@@ -7,3 +7,5 @@ from .audit_result_repository import *
 from .audit_rule_repository import *
 from .contract_repository import *
 from .task_repository import *
+from .alert_repository import *
+from .search_index import *

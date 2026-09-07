@@ -5,7 +5,6 @@ from typing import Dict
 from langchain_core.prompts import ChatPromptTemplate
 
 from csm_ai_service.server.conversation.chat.utils import History
-from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.scanPdfExtractText import SCANPDFExtractText
 from csm_ai_service.server.utils import get_ChatOpenAI, get_default_llm, get_prompt_template, fix_llm_json_output
 from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.pdfExtractText import PDFExtractText
 from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.wordExtractText import WORDExtractText
@@ -41,10 +40,11 @@ def extract_structured_data(file_name: str, full_text: str,
     chat_prompt = ChatPromptTemplate.from_messages([input_msg])
     prompt = chat_prompt.invoke({"full_text": full_text, "table_data": table_data})
     # x = prompt.to_string()
+    logger.info(f"【解析开始】大模型开始提取{file_name}的结构化信息")
     response = llm.invoke(prompt)  # 一次性调用模型，返回完整响应
 
     content = response.content  # 核心：提取完整回答文本
-    logger.info(f"\n【step 2】大模型提取{file_name}的结构化信息")
+    logger.info(f"【解析结束】大模型完成提取{file_name}的结构化信息")
 
     result = fix_llm_json_output(content)
     return result
@@ -60,19 +60,7 @@ def extract_text_from_file(file_path: str, ext: str) -> tuple[str, str]:
         parser = PDFExtractText(file_path)
         full_text = parser.full_text
         table_data_text = str(parser.tables_data)
-        if len(full_text) <= Settings.basic_settings.MIN_PDF_TEXT_LENGTH: # 50个字都没有，使用ocr识别
-            if Settings.basic_settings.OCR_ENABLED:  # 50个字都没有，使用ocr识别
-                parser = SCANPDFExtractText(file_path)
-                full_text = parser.full_text
-                table_data_text = str(parser.table_data)
-                if len(full_text) <= 50:
-                    raise Exception("文件内容太少，无法提取")
-                else:
-                    return full_text, table_data_text
-            else:
-                raise Exception("文件内容太少，无法提取")
-        else:
-            return full_text, table_data_text
+        return full_text, table_data_text
 
 
 def extract_dict_from_file_by_llm(file_path: str, file_name: str, ext: str) -> Dict:
