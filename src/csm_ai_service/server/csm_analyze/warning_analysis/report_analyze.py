@@ -20,6 +20,52 @@ from csm_ai_service.server.csm_analyze.warning_analysis.extract_info.helper impo
 logger = build_logger()
 
 
+# 高危告警判断 prompt
+_HIGH_RISK_JUDGE_PROMPT = """你是电力监控系统告警分级专家。请根据以下告警内容，判断该告警是否属于高危告警。
+
+高危告警的特征包括但不限于：
+1. 445端口相关告警（如端口扫描、端口爆破、SMB漏洞利用等）
+2. 违规外联/非法外联（内网设备未经授权连接外部网络）
+3. 3389端口相关告警（如远程桌面暴力破解、RDP漏洞利用等）
+4. 病毒/木马/恶意程序/恶意代码/勒索/挖矿/后门等恶意软件告警
+5. 互联网地址访问（内网设备访问互联网地址）
+6. 其他严重威胁电力监控系统安全的告警
+
+普通告警的特征：
+- 一般性的端口告警（非445/3389等高危端口）
+- 常规的设备状态告警
+- 低风险的网络行为告警
+- 不涉及安全威胁的运维类告警
+
+【告警内容】
+{alert_content}
+
+请严格按以下JSON格式输出，不要输出其他任何内容：
+{{"is_high_risk": true或false, "reason": "简要说明判断理由"}}"""
+
+
+def is_high_risk_alert(alert_content: str) -> bool:
+    """通过大模型判断告警是否为高危告警，返回True/False"""
+    if not alert_content:
+        return False
+    try:
+        llm = get_ChatOpenAI(
+            model_name=get_default_llm(),
+            temperature=0,
+            max_tokens=200,
+        )
+        prompt = _HIGH_RISK_JUDGE_PROMPT.format(alert_content=alert_content[:2000])
+        response = llm.invoke(prompt)
+        result = fix_llm_json_output(response.content)
+        is_high = result.get("is_high_risk", False)
+        reason = result.get("reason", "")
+        logger.info(f"大模型判断高危告警结果：is_high_risk={is_high}，理由：{reason}")
+        return bool(is_high)
+    except Exception as e:
+        logger.warning(f"大模型判断高危告警失败，降级为普通告警: {e}")
+        return False
+
+
 # 组装 prompt
 def construct_rag_prompt(alarm_desc: str, top_k: int = 3):
     docs = search_alert_reports(query=alarm_desc, top_k=top_k)
@@ -108,6 +154,12 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
         return BaseResponse(code=202, msg=report_response.msg, data=data)
     report_data = report_response.data
 
+    # 【step1.5】 判断是否为高危告警
+    alert_content = report_data.get("告警内容", "")
+    is_high_risk = is_high_risk_alert(alert_content)
+    risk_level = "高危告警" if is_high_risk else "普通告警"
+    logger.info(f"【step1.5】 告警类型判定：{risk_level}，告警内容片段：{alert_content[:100]}")
+
     # 【step2】 获取规则库
     rules_desc = get_rules_desc(limit=5)
     logger.info("【step2】 获取规则库")
@@ -117,14 +169,15 @@ def warning_analyze(warning_number: str = Body("test", description="告警编号
                                              top_k=Settings.kb_settings.VECTOR_SEARCH_TOP_K)
     logger.info("【step3】获取历史数据信息")
 
-    # 【step4】 组装提示词
-    prompt_template = get_prompt_template("warning", "analyze")
+    # 【step4】 组装提示词（根据高危/普通选择不同模板）
+    prompt_name = "analyze_high_risk" if is_high_risk else "analyze_normal"
+    prompt_template = get_prompt_template("warning", prompt_name)
     # 渲染提示词
     input_msg = History(role="user", content=prompt_template).to_msg_template(False)
     chat_prompt = ChatPromptTemplate.from_messages([input_msg])
     report_info = json.dumps(report_data, ensure_ascii=False, indent=2)
     prompt = chat_prompt.invoke({"retrieved_info": rag_retrieve_info, "report_info": report_info, "rules_info": rules_desc})
-    logger.info(f"【step4】 组装提示词,提示词如下\n{prompt.to_string()}")
+    logger.info(f"【step4】 组装提示词（{risk_level}，模板={prompt_name}），提示词如下\n{prompt.to_string()}")
 
 
     # 【step5】 调用大模型

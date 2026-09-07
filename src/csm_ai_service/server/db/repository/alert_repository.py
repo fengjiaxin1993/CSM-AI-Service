@@ -143,10 +143,11 @@ def search_alert_reports(
     session,
     query: str,
     top_k: int = 20,
+    status: str = "saved",
 ) -> List[dict]:
     """
     全文检索告警报告：使用 jieba 分词后，对 keywords_index 做 LIKE 匹配，
-    并计算相关度得分排序返回。
+    并计算相关度得分排序返回。默认只查询已保存的报告（status=saved），传None则查询全部。
     """
     if not query:
         return []
@@ -159,6 +160,8 @@ def search_alert_reports(
     for token in query_tokens:
         filters.append(AlertReportModel.keywords_index.like(f"%{token}%"))
     q = session.query(AlertReportModel).filter(or_(*filters))
+    if status is not None:
+        q = q.filter_by(status=status)
     results = q.order_by(desc(AlertReportModel.update_time)).limit(top_k * 3).all()
 
     # 计算相关度并排序
