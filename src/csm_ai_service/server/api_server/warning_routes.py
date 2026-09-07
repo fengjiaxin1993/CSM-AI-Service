@@ -4,7 +4,8 @@ from fastapi.responses import FileResponse
 
 from csm_ai_service.utils import build_logger
 from csm_ai_service.server.csm_analyze.warning_analysis.gen_notice import generate_doc_from_data
-from csm_ai_service.server.csm_analyze.warning_analysis.report_analyze import warning_analyze, save_warning_report, delete_warning_report
+from csm_ai_service.server.csm_analyze.warning_analysis.report_analyze import warning_analyze, save_warning_report, \
+    delete_warning_report, get_alarm_report_info
 
 logger = build_logger()
 
@@ -53,6 +54,11 @@ warning_router.post(
     "/save_warning_report",
     summary="保存告警处置报告",
 )(save_warning_report)
+
+warning_router.post(
+    "/get_alarm_report_info",
+    summary="获取告警处置报告信息",
+)(get_alarm_report_info)
 
 
 warning_router.post(

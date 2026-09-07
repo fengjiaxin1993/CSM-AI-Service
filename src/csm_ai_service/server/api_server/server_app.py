@@ -22,6 +22,7 @@ from csm_ai_service.server.api_server.kb_routes import kb_router
 from csm_ai_service.server.utils import MakeFastAPIOffline
 from csm_ai_service.server.api_server.pdf_extract_routes import pdf_extract_router
 from csm_ai_service.server.api_server.chat_manager_routes import chat_manager_router
+from csm_ai_service.server.api_server.alert_routes import alert_report_router, alert_rule_router
 from csm_ai_service.utils import build_logger
 logger = build_logger()
 
@@ -99,6 +100,26 @@ def create_app():
             return FileResponse(results_path)
         return {"message": "审计结果页面不存在", "docs": "/results"}
 
+    @app.get("/alert-reports",summary="告警处置报告", include_in_schema=False)
+    async def alert_reports_page():
+        """告警处置报告页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
+        reports_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "alert_reports.html")
+        if os.path.exists(reports_path):
+            return FileResponse(reports_path)
+        return {"message": "告警处置报告页面不存在", "docs": "/alert-reports"}
+
+    @app.get("/alert-rules",summary="告警处置规则", include_in_schema=False)
+    async def alert_rules_page():
+        """告警处置规则页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
+        rules_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "alert_rules.html")
+        if os.path.exists(rules_path):
+            return FileResponse(rules_path)
+        return {"message": "告警处置规则页面不存在", "docs": "/alert-rules"}
+
     @app.get("/docs", summary="swagger 文档", include_in_schema=False)
     async def document():
         if not Settings.basic_settings.SHOW_PAGES:
@@ -124,6 +145,8 @@ def create_app():
     app.include_router(pdf_extract_router)
     app.include_router(chat_manager_router)
     app.include_router(platform_warning_router)
+    app.include_router(alert_report_router)
+    app.include_router(alert_rule_router)
 
 
     return app
