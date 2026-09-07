@@ -341,6 +341,21 @@ class AuditRuleResponse(BaseModel):
     create_time: Optional[str]
     update_time: Optional[str]
 
+class AlertReport(BaseModel):
+    report_title: Optional[str] = Field(default=None, description="报告标题")
+    alert_content: Optional[str] = Field(default=None, description="告警内容")
+    meta_info: Optional[dict] = Field(default=None, description="告警元信息（JSON对象）")
+    file_name: Optional[str] = Field(default=None, description="文件名称")
+    full_text: Optional[str] = Field(default=None, description="文档段落文本（不含表格）")
+    table_data_text: Optional[str] = Field(default=None, description="文档表格数据文本")
+    status: Optional[str] = Field(default=None, description="状态：cache=缓存, saved=已保存")
+
+class AlertRule(BaseModel):
+    rule_code: str = Field(default="", description="规则编号（唯一键）")
+    name: str = Field(..., description="规则名称")
+    description: str = Field(default="", description="规则详细描述")
+
+
 def run_async(cor):
     """
     在同步环境中运行异步代码.
