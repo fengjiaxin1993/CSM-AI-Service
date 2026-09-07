@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>告警处置规则</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        .cr-header {
+            background: linear-gradient(135deg, #00695c 0%, #004d40 100%);
+            color: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cr-header h1 {
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .cr-header .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-back {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00695c;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .toolbar-left, .toolbar-right {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 0 15px;
+            background: white;
+        }
+
+        .search-box input {
+            border: none;
+            padding: 12px;
+            font-size: 14px;
+            outline: none;
+            width: 280px;
+        }
+
+        select, .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: #00695c; color: white; }
+        .btn-primary:hover { background: #004d40; }
+        .btn-success { background: #4caf50; color: white; }
+        .btn-success:hover { background: #45a049; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn-danger:hover { background: #da190b; }
+        .btn-secondary { background: #607d8b; color: white; }
+        .btn-secondary:hover { background: #455a64; }
+        .btn-info { background: #0288d1; color: white; }
+        .btn-info:hover { background: #0277bd; }
+
+        .rules-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .rules-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .rules-table th {
+            background: #f5f7fa;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .rules-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 13px;
+            color: #4a5568;
+            vertical-align: top;
+        }
+
+        .rules-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .rule-description {
+            max-width: 600px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .rule-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .rule-actions button {
+            padding: 6px 10px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-edit { background: #00695c; color: white; }
+        .btn-edit:hover { background: #004d40; }
+        .btn-delete { background: #f44336; color: white; }
+        .btn-delete:hover { background: #da190b; }
+
+        /* 上传区域样式 */
+        .upload-area {
+            border: 2px dashed #e2e8f0;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #00695c;
+            background: #e0f2f1;
+        }
+        .upload-area .upload-icon {
+            font-size: 48px;
+            color: #00695c;
+            margin-bottom: 10px;
+        }
+        .upload-area .upload-text {
+            color: #666;
+            font-size: 14px;
+        }
+        .upload-area .upload-hint {
+            color: #999;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .upload-area input[type="file"] {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .upload-file-list {
+            margin-top: 15px;
+            text-align: left;
+        }
+        .upload-file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #f5f7fa;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .upload-file-item .file-name {
+            color: #2d3748;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 80%;
+        }
+        .upload-file-item .file-remove {
+            color: #f44336;
+            cursor: pointer;
+            font-size: 16px;
+            background: none;
+            border: none;
+            padding: 0 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            color: #2d3748;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #2d3748;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success { background: #4caf50; }
+        .toast.error { background: #f44336; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .navbar {
+            background: #1565c0;
+            border-bottom: 1px solid #0d47a1;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            z-index: 101;
+            flex-shrink: 0;
+        }
+        .navbar-brand {
+            font-size: 16px; font-weight: 600; color: #fff;
+            margin-right: 24px; padding: 12px 0; white-space: nowrap;
+        }
+        .nav-links { display: flex; gap: 2px; align-items: center; }
+        .nav-link {
+            padding: 12px 18px; border: none; border-radius: 0;
+            cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
+            background: transparent; transition: all 0.2s; display: inline-block;
+        }
+        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .nav-link.active { color: #fff; background: rgba(255,255,255,0.2); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <span class="navbar-brand">审计服务</span>
+        <div class="nav-links">
+            <a class="nav-link" href="/">首页</a>
+            <a class="nav-link" href="/contracts">合同管理</a>
+            <a class="nav-link" href="/rules">规则管理</a>
+            <a class="nav-link" href="/results">审核结果</a>
+            <a class="nav-link" href="/alert-reports">告警处置报告</a>
+            <a class="nav-link active" href="/alert-rules">告警处置规则</a>
+            <a class="nav-link" href="/docs">API文档</a>
+        </div>
+    </div>
+    <div class="cr-header">
+        <h1>📏 告警处置规则</h1>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="number" id="totalRules">-</div>
+                <div class="label">总规则数</div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="搜索规则（jieba分词检索）...">
+                </div>
+                <button class="btn btn-info" onclick="searchRules()">🔍 检索</button>
+                <button class="btn btn-secondary" onclick="loadRules()">🔄 刷新</button>
+            </div>
+            <div class="toolbar-right">
+                <button class="btn btn-info" onclick="exportExcel()">📥 导出Excel</button>
+                <button class="btn btn-primary" onclick="showImportExcelModal()">📤 导入Excel</button>
+                <button class="btn btn-primary" onclick="initDefaultRules()">📋 初始化默认规则</button>
+                <button class="btn btn-success" onclick="showAddModal()">➕ 新建规则</button>
+            </div>
+        </div>
+
+        <div class="rules-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:60px">ID</th>
+                        <th style="width:120px">规则编号</th>
+                        <th style="width:220px">规则名称</th>
+                        <th>规则详细描述</th>
+                        <th style="width:140px">更新时间</th>
+                        <th style="width:140px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="rulesTableBody">
+                    <tr><td colspan="6" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 编辑/新增弹窗 -->
+    <div class="modal-overlay" id="ruleModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">新建规则</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="ruleId">
+                <div class="form-group">
+                    <label>规则编号 <span style="color:#999;font-size:12px">（唯一键，如 RULE_001）</span></label>
+                    <input type="text" id="ruleCode" placeholder="请输入规则编号">
+                </div>
+                <div class="form-group">
+                    <label>规则名称 *</label>
+                    <input type="text" id="ruleName" placeholder="请输入规则名称">
+                </div>
+                <div class="form-group">
+                    <label>规则详细描述 <span style="color:#00695c;font-size:12px">（用于jieba分词索引）</span></label>
+                    <textarea id="ruleDesc" placeholder="请输入规则的详细描述"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-success" onclick="saveRule()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入Excel弹窗 -->
+    <div class="modal-overlay" id="importExcelModal">
+        <div class="modal" style="max-width:600px">
+            <div class="modal-header">
+                <h2>📤 导入Excel规则</h2>
+                <button class="modal-close" onclick="closeImportExcelModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-area" id="importExcelArea">
+                    <div class="upload-icon">📊</div>
+                    <div class="upload-text">点击或拖拽Excel文件到此处</div>
+                    <div class="upload-hint">支持 .xlsx 格式，按"规则编号"去重</div>
+                    <input type="file" id="importExcelInput" accept=".xlsx,.xls" onchange="handleImportExcelSelect(event)">
+                </div>
+                <div class="upload-file-list" id="importExcelFileList"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeImportExcelModal()">取消</button>
+                <button class="btn btn-primary" id="importExcelBtn" onclick="importExcel()" disabled>开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        let allRules = [];
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = API_BASE_URL + endpoint;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('API请求失败:', error);
+                showToast('请求失败: ' + error.message, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function loadRules() {
+            const tbody = document.getElementById('rulesTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+
+            try {
+                const result = await apiRequest('/api/alert-rules/list?limit=200');
+                if (result.success && result.data && result.data.rules) {
+                    allRules = result.data.rules;
+                    document.getElementById('totalRules').textContent = allRules.length;
+                    renderRulesTable(allRules);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">加载失败: ' + (result.message || '未知错误') + '</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">加载异常: ' + error.message + '</td></tr>';
+            }
+        }
+
+        function renderRulesTable(rules) {
+            const tbody = document.getElementById('rulesTableBody');
+            if (rules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无规则，点击"新建规则"创建</td></tr>';
+                return;
+            }
+
+            let html = '';
+            rules.forEach(rule => {
+                html += '<tr>' +
+                    '<td>' + rule.id + '</td>' +
+                    '<td>' + escapeHtml(rule.rule_code || '-') + '</td>' +
+                    '<td><strong>' + escapeHtml(rule.name) + '</strong></td>' +
+                    '<td class="rule-description" title="' + escapeHtml(rule.description || '') + '">' +
+                        escapeHtml(rule.description || '-') + '</td>' +
+                    '<td>' + (rule.update_time || '-') + '</td>' +
+                    '<td><div class="rule-actions">' +
+                        '<button class="btn-edit" onclick="editRule(' + rule.id + ')">编辑</button>' +
+                        '<button class="btn-delete" onclick="deleteRule(' + rule.id + ')">删除</button>' +
+                    '</div></td>' +
+                '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        async function searchRules() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                loadRules();
+                return;
+            }
+
+            const tbody = document.getElementById('rulesTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">检索中...</td></tr>';
+
+            try {
+                const result = await apiRequest('/api/alert-rules/search?query=' + encodeURIComponent(query) + '&top_k=50');
+                if (result.success && result.data && result.data.results) {
+                    renderRulesTable(result.data.results);
+                    showToast('检索完成，找到 ' + result.data.results.length + ' 条结果');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">检索失败</td></tr>';
+                }
+            } catch (error) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">检索异常</td></tr>';
+            }
+        }
+
+        function showAddModal() {
+            document.getElementById('modalTitle').textContent = '新建规则';
+            document.getElementById('ruleId').value = '';
+            document.getElementById('ruleCode').value = '';
+            document.getElementById('ruleName').value = '';
+            document.getElementById('ruleDesc').value = '';
+            document.getElementById('ruleModal').classList.add('active');
+        }
+
+        async function editRule(ruleId) {
+            const result = await apiRequest('/api/alert-rules/detail/' + ruleId);
+            if (result.success && result.data) {
+                const rule = result.data;
+                document.getElementById('modalTitle').textContent = '编辑规则';
+                document.getElementById('ruleId').value = rule.id;
+                document.getElementById('ruleCode').value = rule.rule_code || '';
+                document.getElementById('ruleName').value = rule.name || '';
+                document.getElementById('ruleDesc').value = rule.description || '';
+                document.getElementById('ruleModal').classList.add('active');
+            } else {
+                showToast('获取规则详情失败', 'error');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('ruleModal').classList.remove('active');
+        }
+
+        async function saveRule() {
+            const ruleId = document.getElementById('ruleId').value;
+            const name = document.getElementById('ruleName').value.trim();
+            if (!name) {
+                showToast('请输入规则名称', 'error');
+                return;
+            }
+
+            const data = {
+                rule_code: document.getElementById('ruleCode').value.trim(),
+                name: name,
+                description: document.getElementById('ruleDesc').value.trim(),
+            };
+
+            let result;
+            if (ruleId) {
+                result = await apiRequest('/api/alert-rules/update/' + ruleId, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+            } else {
+                result = await apiRequest('/api/alert-rules/create', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+            }
+
+            if (result.success) {
+                showToast(ruleId ? '规则更新成功' : '规则创建成功');
+                closeModal();
+                loadRules();
+            } else {
+                showToast(result.message || '保存失败', 'error');
+            }
+        }
+
+        async function deleteRule(ruleId) {
+            if (!confirm('确定要删除这条规则吗？此操作不可恢复。')) return;
+
+            const result = await apiRequest('/api/alert-rules/delete/' + ruleId, { method: 'POST' });
+            if (result.success) {
+                showToast('规则删除成功');
+                loadRules();
+            } else {
+                showToast(result.message || '删除失败', 'error');
+            }
+        }
+
+        document.getElementById('ruleModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        document.getElementById('importExcelModal').addEventListener('click', function(e) {
+            if (e.target === this) closeImportExcelModal();
+        });
+
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchRules();
+        });
+
+        async function initDefaultRules() {
+            if (!confirm('确定要初始化默认规则吗？已存在的规则不会重复插入。')) return;
+
+            const result = await apiRequest('/api/alert-rules/init-default', { method: 'POST' });
+            if (result.success) {
+                const count = result.data && result.data.inserted_count || 0;
+                showToast('初始化完成，本次新增 ' + count + ' 条规则');
+                loadRules();
+            } else {
+                showToast(result.message || '初始化失败', 'error');
+            }
+        }
+
+        // ============ Excel 导出导入 ============
+        function exportExcel() {
+            showToast('正在导出，请稍候...');
+            fetch(API_BASE_URL + '/api/alert-rules/export-excel')
+                .then(response => {
+                    if (!response.ok) throw new Error('导出失败');
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'alert_rules.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                    showToast('导出成功');
+                })
+                .catch(error => {
+                    showToast('导出失败: ' + error.message, 'error');
+                });
+        }
+
+        let importExcelFile = null;
+
+        function showImportExcelModal() {
+            importExcelFile = null;
+            document.getElementById('importExcelFileList').innerHTML = '';
+            document.getElementById('importExcelBtn').disabled = true;
+            document.getElementById('importExcelInput').value = '';
+            document.getElementById('importExcelModal').classList.add('active');
+        }
+
+        function closeImportExcelModal() {
+            document.getElementById('importExcelModal').classList.remove('active');
+            importExcelFile = null;
+        }
+
+        function handleImportExcelSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            importExcelFile = file;
+            const sizeStr = file.size < 1024 * 1024
+                ? (file.size / 1024).toFixed(1) + ' KB'
+                : (file.size / 1024 / 1024).toFixed(1) + ' MB';
+            document.getElementById('importExcelFileList').innerHTML =
+                '<div class="upload-file-item">' +
+                '<span class="file-name">📊 ' + escapeHtml(file.name) + ' (' + sizeStr + ')</span>' +
+                '<button class="file-remove" onclick="removeImportExcelFile()">&times;</button>' +
+                '</div>';
+            document.getElementById('importExcelBtn').disabled = false;
+            event.target.value = '';
+        }
+
+        function removeImportExcelFile() {
+            importExcelFile = null;
+            document.getElementById('importExcelFileList').innerHTML = '';
+            document.getElementById('importExcelBtn').disabled = true;
+        }
+
+        async function importExcel() {
+            if (!importExcelFile) return;
+            const btn = document.getElementById('importExcelBtn');
+            btn.disabled = true;
+            btn.textContent = '导入中...';
+
+            const formData = new FormData();
+            formData.append('file', importExcelFile);
+
+            try {
+                const response = await fetch(API_BASE_URL + '/api/alert-rules/import-excel', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showToast(result.message || '导入成功');
+                    closeImportExcelModal();
+                    loadRules();
+                } else {
+                    showToast(result.message || '导入失败', 'error');
+                }
+            } catch (error) {
+                showToast('导入异常: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '开始导入';
+            }
+        }
+
+        // 拖拽支持 - 导入Excel区域
+        document.addEventListener('DOMContentLoaded', function() {
+            loadRules();
+
+            const importArea = document.getElementById('importExcelArea');
+            if (importArea) {
+                importArea.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    importArea.classList.add('dragover');
+                });
+                importArea.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    importArea.classList.remove('dragover');
+                });
+                importArea.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    importArea.classList.remove('dragover');
+                    const file = e.dataTransfer.files[0];
+                    if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                        importExcelFile = file;
+                        const sizeStr = file.size < 1024 * 1024
+                            ? (file.size / 1024).toFixed(1) + ' KB'
+                            : (file.size / 1024 / 1024).toFixed(1) + ' MB';
+                        document.getElementById('importExcelFileList').innerHTML =
+                            '<div class="upload-file-item">' +
+                            '<span class="file-name">📊 ' + escapeHtml(file.name) + ' (' + sizeStr + ')</span>' +
+                            '<button class="file-remove" onclick="removeImportExcelFile()">&times;</button>' +
+                            '</div>';
+                        document.getElementById('importExcelBtn').disabled = false;
+                    } else {
+                        showToast('请选择 .xlsx 或 .xls 格式文件', 'error');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

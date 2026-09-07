@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>审计结果查看</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        .cr-header {
+            background: linear-gradient(135deg, #7b1fa2 0%, #4a148c 100%);
+            color: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cr-header h1 {
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .cr-header .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-back {
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* 选择面板 */
+        .select-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .select-panel label {
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .select-panel input {
+            padding: 10px 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 200px;
+            outline: none;
+        }
+
+        .select-panel input:focus {
+            border-color: #7b1fa2;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: #7b1fa2;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #6a1b9a;
+        }
+
+        .btn-secondary {
+            background: #607d8b;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #455a64;
+        }
+
+        /* 统计卡片 */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #7b1fa2;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stat-card.pass .number { color: #4caf50; }
+        .stat-card.fail .number { color: #f44336; }
+        .stat-card.rate .number { color: #2196f3; }
+
+        /* 任务信息 */
+        .task-info-bar {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            font-size: 14px;
+        }
+
+        .task-info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .task-info-item .info-label {
+            color: #666;
+        }
+
+        .task-info-item .info-value {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .status-pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .status-processing {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .status-completed {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-failed {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status-ocr_done {
+            background: #f3e5f5;
+            color: #6a1b9a;
+        }
+
+        .status-ocr_processing, .status-audit_processing {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        /* 结果列表 */
+        .results-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .results-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table th {
+            background: #f5f7fa;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .results-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 13px;
+            color: #4a5568;
+            vertical-align: top;
+        }
+
+        .results-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .col-small { width: 60px; }
+        .col-medium { width: 130px; }
+        .col-large { width: 200px; }
+
+        .result-pass {
+            color: #4caf50;
+            font-weight: 600;
+        }
+
+        .result-fail {
+            color: #f44336;
+            font-weight: 600;
+        }
+
+        .text-ellipsis {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+        }
+
+        .text-ellipsis:hover {
+            white-space: normal;
+            overflow: visible;
+            background: #fff;
+            position: relative;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .chapter-tag {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            display: inline-block;
+            margin: 2px;
+            background: #f3e5f5;
+            color: #6a1b9a;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success { background: #4caf50; }
+        .toast.error { background: #f44336; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* 展开详情 */
+        .expand-btn {
+            padding: 4px 10px;
+            font-size: 12px;
+            background: #f3e5f5;
+            color: #7b1fa2;
+            border: 1px solid #ce93d8;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .expand-btn:hover {
+            background: #e1bee7;
+        }
+
+        .detail-row-hidden {
+            display: none;
+        }
+
+        .detail-row-hidden.show {
+            display: table-row;
+        }
+
+        .detail-row-hidden td {
+            background: #fafafa;
+            padding: 15px 20px;
+        }
+
+        .detail-block {
+            margin-bottom: 10px;
+        }
+
+        .detail-block .detail-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .detail-block .detail-content {
+            color: #333;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+            color: #2d3748;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .detail-field {
+            margin-bottom: 15px;
+        }
+
+        .detail-field .field-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .detail-field .field-value {
+            color: #333;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .navbar {
+            background: #1565c0;
+            border-bottom: 1px solid #0d47a1;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            z-index: 101;
+            flex-shrink: 0;
+        }
+        .navbar-brand {
+            font-size: 16px; font-weight: 600; color: #fff;
+            margin-right: 24px; padding: 12px 0; white-space: nowrap;
+        }
+        .nav-links { display: flex; gap: 2px; align-items: center; }
+        .nav-link {
+            padding: 12px 18px; border: none; border-radius: 0;
+            cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
+            background: transparent; transition: all 0.2s; display: inline-block;
+        }
+        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .nav-link.active { color: #fff; background: rgba(255,255,255,0.2); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <span class="navbar-brand">审计服务</span>
+        <div class="nav-links">
+            <a class="nav-link" href="/">首页</a>
+            <a class="nav-link" href="/contracts">合同管理</a>
+            <a class="nav-link" href="/rules">规则管理</a>
+            <a class="nav-link active" href="/results">审核结果</a>
+            <a class="nav-link" href="/alert-reports">告警处置报告</a>
+            <a class="nav-link" href="/alert-rules">告警处置规则</a>
+            <a class="nav-link" href="/docs">API文档</a>
+        </div>
+    </div>
+    <div class="cr-header">
+        <h1>🔍 审计结果查看</h1>
+    </div>
+
+    <div class="container">
+        <!-- 任务选择 -->
+        <div class="select-panel">
+            <label for="taskIdInput">任务 ID：</label>
+            <input type="number" id="taskIdInput" placeholder="请输入任务ID" min="1" onkeypress="if(event.key==='Enter')loadResults()">
+            <button class="btn btn-primary" onclick="loadResults()">🔍 查询审计结果</button>
+            <span style="color:#999;font-size:13px;">可从合同管理页面的任务列表获取任务ID</span>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats" id="statsRow" style="display:none;">
+            <div class="stat-card">
+                <div class="number" id="totalCount">-</div>
+                <div class="label">审计项总数</div>
+            </div>
+            <div class="stat-card pass">
+                <div class="number" id="passCount">-</div>
+                <div class="label">✅ 合规通过</div>
+            </div>
+            <div class="stat-card fail">
+                <div class="number" id="failCount">-</div>
+                <div class="label">❌ 不合规</div>
+            </div>
+            <div class="stat-card rate">
+                <div class="number" id="passRate">-</div>
+                <div class="label">合规率</div>
+            </div>
+        </div>
+
+        <!-- 任务信息 -->
+        <div class="task-info-bar" id="taskInfoBar" style="display:none;">
+            <div class="task-info-item">
+                <span class="info-label">任务ID：</span>
+                <span class="info-value" id="infoTaskId">-</span>
+            </div>
+            <div class="task-info-item">
+                <span class="info-label">合同ID：</span>
+                <span class="info-value" id="infoContractId">-</span>
+            </div>
+            <div class="task-info-item">
+                <span class="info-label">任务状态：</span>
+                <span id="infoTaskStatus">-</span>
+            </div>
+            <div class="task-info-item">
+                <span class="info-label">OCR状态：</span>
+                <span id="infoOcrStatus">-</span>
+            </div>
+            <div class="task-info-item">
+                <span class="info-label">审计状态：</span>
+                <span id="infoAuditStatus">-</span>
+            </div>
+            <div class="task-info-item">
+                <span class="info-label">创建时间：</span>
+                <span class="info-value" id="infoCreateTime">-</span>
+            </div>
+        </div>
+
+        <!-- 审计结果表格 -->
+        <div class="results-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-small">#</th>
+                        <th>规则名称</th>
+                        <th class="col-medium">合规状态</th>
+                        <th>结论</th>
+                        <th class="col-large">引用章节</th>
+                        <th class="col-medium">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsTableBody">
+                    <tr>
+                        <td colspan="6" class="empty-state">请在上方输入任务ID并点击"查询审计结果"</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 结果详情弹窗 -->
+    <div class="modal-overlay" id="resultDetailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>审计结果详情</h2>
+                <button class="modal-close" onclick="closeResultDetail()">&times;</button>
+            </div>
+            <div class="modal-body" id="resultDetailBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeResultDetail()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script>
+        // 自动获取当前页面所在的服务器地址，支持跨服务器部署
+        const API_BASE_URL = window.location.origin;
+        let currentTaskId = null;
+        let currentResults = [];
+
+        function showToast(message, type) {
+            type = type || 'success';
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        async function apiRequest(endpoint, options) {
+            options = options || {};
+            const url = API_BASE_URL + endpoint;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('API请求失败:', error);
+                showToast('请求失败: ' + error.message, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getStatusBadge(status) {
+            const map = {
+                'pending': 'status-pending',
+                'processing': 'status-processing',
+                'ocr_processing': 'status-ocr_processing',
+                'ocr_done': 'status-ocr_done',
+                'audit_processing': 'status-audit_processing',
+                'completed': 'status-completed',
+                'failed': 'status-failed'
+            };
+            const cls = map[status] || 'status-pending';
+            return '<span class="status-badge ' + cls + '">' + escapeHtml(status) + '</span>';
+        }
+
+        // 从URL参数读取task_id
+        function getUrlParam(name) {
+            const params = new URLSearchParams(window.location.search);
+            return params.get(name);
+        }
+
+        // 加载审计结果
+        async function loadResults() {
+            const taskIdInput = document.getElementById('taskIdInput');
+            let taskId = parseInt(taskIdInput.value);
+
+            if (!taskId || taskId <= 0) {
+                showToast('请输入有效的任务ID', 'error');
+                return;
+            }
+
+            currentTaskId = taskId;
+            const tbody = document.getElementById('resultsTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">加载中...</td></tr>';
+
+            // 并行加载任务信息和审计结果
+            const [taskResult, resultsResult] = await Promise.all([
+                apiRequest('/api/tasks/' + taskId),
+                apiRequest('/api/audit-results/task/' + taskId)
+            ]);
+
+            // 更新任务信息栏
+            if (taskResult.success && taskResult.data) {
+                const t = taskResult.data;
+                document.getElementById('taskInfoBar').style.display = 'flex';
+                document.getElementById('infoTaskId').textContent = t.id;
+                document.getElementById('infoContractId').textContent = t.contract_id;
+                document.getElementById('infoTaskStatus').innerHTML = getStatusBadge(t.status);
+                document.getElementById('infoOcrStatus').innerHTML = getStatusBadge(t.ocr_status);
+                document.getElementById('infoAuditStatus').innerHTML = getStatusBadge(t.audit_status);
+                document.getElementById('infoCreateTime').textContent = t.create_time || '-';
+            } else {
+                document.getElementById('taskInfoBar').style.display = 'none';
+            }
+
+            // 渲染结果
+            if (resultsResult.success && resultsResult.data) {
+                currentResults = resultsResult.data.results || [];
+                document.getElementById('statsRow').style.display = 'grid';
+                document.getElementById('totalCount').textContent = resultsResult.data.total || 0;
+                document.getElementById('passCount').textContent = resultsResult.data.pass || 0;
+                document.getElementById('failCount').textContent = resultsResult.data.fail || 0;
+                const total = resultsResult.data.total || 0;
+                const pass = resultsResult.data.pass || 0;
+                const rate = total > 0 ? ((pass / total) * 100).toFixed(1) + '%' : 'N/A';
+                document.getElementById('passRate').textContent = rate;
+                renderResultsTable(currentResults);
+            } else {
+                document.getElementById('statsRow').style.display = 'none';
+                const msg = resultsResult.message || '未知错误';
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">' + escapeHtml(msg) + '</td></tr>';
+            }
+        }
+
+        function renderResultsTable(results) {
+            const tbody = document.getElementById('resultsTableBody');
+            if (!results || results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">该任务暂无审计结果</td></tr>';
+                return;
+            }
+
+            let html = '';
+            results.forEach(function(result, index) {
+                const statusIcon = result.is_compliant ? '✅' : '❌';
+                const statusClass = result.is_compliant ? 'result-pass' : 'result-fail';
+                const statusText = result.is_compliant ? '合规' : '不合规';
+
+                const chapters = result.related_chapters || [];
+                const chaptersHtml = chapters.map(function(ch) {
+                    return '<span class="chapter-tag">' + escapeHtml(ch) + '</span>';
+                }).join('');
+
+                html += '<tr>' +
+                    '<td>' + (index + 1) + '</td>' +
+                    '<td><strong>' + escapeHtml(result.rule_name) + '</strong></td>' +
+                    '<td><span class="' + statusClass + '">' + statusIcon + ' ' + statusText + '</span></td>' +
+                    '<td><span class="text-ellipsis" title="' + escapeHtml(result.conclusion || '') + '">' + escapeHtml(result.conclusion || '-') + '</span></td>' +
+                    '<td>' + (chaptersHtml || '<span class="text-muted">-</span>') + '</td>' +
+                    '<td><button class="expand-btn" onclick="showResultDetail(' + index + ')">查看详情</button></td>' +
+                '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        function showResultDetail(index) {
+            const result = currentResults[index];
+            if (!result) return;
+
+            const body = document.getElementById('resultDetailBody');
+            body.innerHTML = '' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">规则名称</div>' +
+                    '<div class="field-value">' + escapeHtml(result.rule_name || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">规则描述</div>' +
+                    '<div class="field-value">' + escapeHtml(result.rule_description || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">判断逻辑</div>' +
+                    '<div class="field-value">' + escapeHtml(result.rule_judge_logic || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">合规状态</div>' +
+                    '<div class="field-value">' +
+                        (result.is_compliant ? '✅ 合规' : '❌ 不合规') +
+                    '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">结论</div>' +
+                    '<div class="field-value">' + escapeHtml(result.conclusion || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">判断理由</div>' +
+                    '<div class="field-value">' + escapeHtml(result.reasoning || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">原文相关内容</div>' +
+                    '<div class="field-value">' + escapeHtml(result.origin_text || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">引用章节</div>' +
+                    '<div class="field-value">' + escapeHtml((result.related_chapters || []).join(', ') || '-') + '</div>' +
+                '</div>' +
+                '<div class="detail-field">' +
+                    '<div class="field-label">引用原文</div>' +
+                    '<div class="field-value">' + escapeHtml(result.related_text || '-') + '</div>' +
+                '</div>';
+
+            document.getElementById('resultDetailModal').classList.add('active');
+        }
+
+        function closeResultDetail() {
+            document.getElementById('resultDetailModal').classList.remove('active');
+        }
+
+        // 点击弹窗外部关闭
+        document.getElementById('resultDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeResultDetail();
+        });
+
+        // 页面加载时检查URL参数
+        document.addEventListener('DOMContentLoaded', function() {
+            const taskIdFromUrl = getUrlParam('task_id');
+            if (taskIdFromUrl) {
+                document.getElementById('taskIdInput').value = taskIdFromUrl;
+                loadResults();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF合同预览与定位</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            z-index: 100;
+        }
+
+        .toolbar h1 { font-size: 18px; color: #333; margin-right: auto; }
+
+        .file-input-wrapper {
+            position: relative; overflow: hidden; display: inline-block;
+        }
+        .file-input-wrapper input[type=file] { position: absolute; left: -9999px; }
+
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 14px; transition: all 0.2s;
+        }
+        .btn-primary { background: #1976d2; color: white; }
+        .btn-primary:hover { background: #1565c0; }
+        .btn-success { background: #4caf50; color: white; }
+        .btn-success:hover { background: #43a047; }
+
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+
+        .pdf-container {
+            width: 65%; flex: none;
+            overflow-y: auto; padding: 20px;
+            background: #e0e0e0;
+        }
+
+        .pdf-pages-wrapper {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 20px;
+        }
+
+        .pdf-page {
+            position: relative; background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 4px; overflow: hidden;
+            min-width: 0; width: fit-content; max-width: 100%;
+        }
+
+        .pdf-page img {
+            display: block; max-width: 100%; height: auto;
+            image-rendering: auto;
+        }
+
+        .page-number {
+            position: absolute; bottom: 8px; right: 12px;
+            background: rgba(0,0,0,0.6); color: white;
+            padding: 4px 8px; border-radius: 4px; font-size: 12px;
+        }
+
+        .highlights-layer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; overflow: hidden;
+        }
+
+        .highlight-box {
+            position: absolute; pointer-events: none;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .highlight-box.visible { opacity: 1; }
+
+        .highlight-box.contract-highlight {
+            border: 2px solid #2196f3;
+            background: rgba(33, 150, 243, 0.2);
+        }
+        .highlight-box.contract-highlight.active {
+            background: rgba(33, 150, 243, 0.4);
+            animation: contract-pulse 1s ease-in-out infinite;
+        }
+        @keyframes contract-pulse {
+            0%, 100% { border-color: #2196f3; box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3); }
+            50% { border-color: #64b5f6; box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.2); }
+        }
+
+        .result-panel {
+            width: 35%; background: #fff;
+            border-left: 1px solid #e0e0e0;
+            display: flex; flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            background: #fafafa;
+        }
+        .panel-header h3 { font-size: 16px; color: #333; margin-bottom: 10px; }
+        .panel-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .panel-content { flex: 1; overflow-y: auto; padding: 15px; }
+
+        .field-card {
+            padding: 12px; border: 1px solid #e0e0e0;
+            border-radius: 6px; margin-bottom: 10px;
+            transition: all 0.2s; cursor: pointer;
+        }
+        .field-card:hover { border-color: #2196f3; background: #e3f2fd; }
+        .field-card.active {
+            border-color: #2196f3; background: #bbdefb;
+            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+        }
+
+        .field-card-header {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 8px;
+        }
+        .field-name { font-size: 13px; color: #666; font-weight: 500; }
+
+        .btn-locate {
+            padding: 4px 10px; font-size: 12px;
+            background: #2196f3; color: white;
+            border: none; border-radius: 4px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-locate:hover { background: #1976d2; }
+
+        .field-value {
+            font-size: 14px; color: #333; font-weight: 500;
+            overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; margin-bottom: 6px;
+        }
+        .field-meta { display: flex; justify-content: space-between; align-items: center; }
+        .field-page { font-size: 11px; color: #999; }
+        .field-keyword {
+            font-size: 11px; color: #2196f3;
+            background: rgba(33, 150, 243, 0.1);
+            padding: 2px 6px; border-radius: 3px;
+        }
+
+        .field-detail {
+            font-size: 12px; color: #555; margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        .field-label { color: #888; }
+        .field-related-text {
+            color: #1976d2; font-weight: 500;
+        }
+
+        .status-ok { color: #2e7d32; }
+        .status-fail { color: #c62828; }
+
+        .empty-state {
+            text-align: center; padding: 40px 20px; color: #999;
+        }
+        .empty-state svg {
+            width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5;
+        }
+
+        .loading {
+            display: flex; align-items: center;
+            justify-content: center; height: 100%; color: #666;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1976d2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .stats {
+            display: flex; gap: 15px; padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 12px; color: #666;
+        }
+        .stat-item { display: flex; align-items: center; gap: 5px; }
+        .stat-value { font-weight: 500; color: #333; }
+
+        .toast {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: #333; color: white;
+            padding: 12px 24px; border-radius: 4px;
+            font-size: 14px; z-index: 1000;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+
+        .navbar {
+            background: #1565c0;
+            border-bottom: 1px solid #0d47a1;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            z-index: 101;
+            flex-shrink: 0;
+        }
+        .navbar-brand {
+            font-size: 16px; font-weight: 600; color: #fff;
+            margin-right: 24px; padding: 12px 0; white-space: nowrap;
+        }
+        .nav-links { display: flex; gap: 2px; align-items: center; }
+        .nav-link {
+            padding: 12px 18px; border: none; border-radius: 0;
+            cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
+            background: transparent; transition: all 0.2s; display: inline-block;
+        }
+        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .nav-link.active { color: #fff; background: rgba(255,255,255,0.2); font-weight: 600; }
+
+
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <span class="navbar-brand">审计服务</span>
+        <div class="nav-links">
+            <a class="nav-link active" href="/">首页</a>
+            <a class="nav-link" href="/contracts">合同管理</a>
+            <a class="nav-link" href="/rules">规则管理</a>
+            <a class="nav-link" href="/results">审核结果</a>
+            <a class="nav-link" href="/alert-reports">告警处置报告</a>
+            <a class="nav-link" href="/alert-rules">告警处置规则</a>
+            <a class="nav-link" href="/docs">API文档</a>
+        </div>
+    </div>
+    <div class="toolbar">
+        <h1>PDF合同预览与定位</h1>
+        <div class="file-input-wrapper">
+            <input type="file" id="fileInput" accept=".pdf">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">选择PDF文件</button>
+        </div>
+        <button class="btn btn-success" id="extractContractBtn" onclick="extractContractFields()" disabled>合同提取</button>
+    </div>
+
+    <div class="main-container">
+        <div class="pdf-container" id="pdfContainer">
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <p>请选择PDF文件开始预览</p>
+            </div>
+        </div>
+
+        <div class="result-panel">
+            <div style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+                <h3 style="font-size: 16px; color: #333;">合同字段</h3>
+            </div>
+            <div class="stats" id="contractStats" style="display:none;">
+                <div class="stat-item">
+                    字段: <span class="stat-value" id="contractFieldCount">0</span> 个
+                </div>
+                <div class="stat-item">
+                    ✅ 通过: <span class="stat-value" id="passCount">0</span>
+                </div>
+                <div class="stat-item">
+                    ❌ 未通过: <span class="stat-value" id="failCount">0</span>
+                </div>
+            </div>
+            <div class="panel-content" id="fieldsContent">
+                <div class="empty-state">
+                    <p>上传PDF后点击"合同提取"按钮</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // 自动获取当前页面所在的服务器地址，支持跨服务器部署
+        const API_BASE_URL = window.location.origin;
+        const AppState = {
+            currentFile: null, pdfPages: [], highlights: [],
+            checkInfo: [], contractPositions: {},
+            contractId: null, taskId: null, pollingTimer: null
+        };
+
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), duration);
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = API_BASE_URL + endpoint;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    const detail = data.detail;
+                    const msg = typeof detail === 'string' ? detail :
+                                Array.isArray(detail) ? detail.map(e => e.msg || JSON.stringify(e)).join('; ') :
+                                JSON.stringify(detail);
+                    throw new Error(msg || '请求失败');
+                }
+                return data;
+            } catch (error) {
+                console.error('API请求失败:', error);
+                showToast('请求失败: ' + error.message);
+                return { success: false, error: error.message };
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function clearHighlights() {
+            AppState.highlights.forEach(h => h.remove());
+            AppState.highlights = [];
+        }
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showToast('请选择PDF文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            showToast('正在上传文件...');
+
+            try {
+                const response = await fetch(API_BASE_URL + '/api/upload', {
+                    method: 'POST', body: formData
+                });
+                const result = await response.json();
+                console.log('[DEBUG] result:', result);
+                if (result.success) {
+                    const data = result.data;
+                    if (!data.file_path) {
+                        showToast('上传响应缺少文件路径');
+                        return;
+                    }
+                    AppState.currentFile = result;
+                    AppState.contractId = data.contract_id;
+                    AppState.taskId = data.task_id;
+                    showToast('上传成功，正在加载PDF...');
+                    document.getElementById('extractContractBtn').disabled = false;
+                    document.getElementById('fieldsContent').innerHTML = `
+                        <div class="empty-state"><p>点击"合同提取"按钮识别字段</p></div>
+                    `;
+                    document.getElementById('contractStats').style.display = 'none';
+                    clearHighlights();
+                    await loadPdfPages(data.file_path);
+                } else {
+                    showToast('上传失败: ' + formatError(result.error));
+                }
+            } catch (error) {
+                showToast('上传出错: ' + formatError(error));
+            }
+        });
+
+        async function loadPdfPages(filepath) {
+            console.log('[DEBUG] loadPdfPages filepath:', filepath, 'type:', typeof filepath);
+            if (!filepath) {
+                document.getElementById('pdfContainer').innerHTML =
+                    '<div class="empty-state"><p>加载失败: 文件路径为空</p></div>';
+                showToast('文件路径为空，无法加载PDF');
+                return;
+            }
+            const container = document.getElementById('pdfContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>正在加载PDF页面...</div>';
+
+            const result = await apiRequest('/api/pdf_pages', {
+                method: 'POST',
+                body: JSON.stringify({ "filepath":filepath })
+            });
+
+            if (result.success) {
+                AppState.pdfPages = result.pages;
+                let html = '<div class="pdf-pages-wrapper">';
+                for (const page of result.pages) {
+                    html += '<div class="pdf-page" id="page-' + page.page_num + '">' +
+                        '<img src="data:image/png;base64,' + page.img_base64 + '"' +
+                        ' alt="第 ' + (page.page_num + 1) + ' 页"' +
+                        ' data-width="' + page.width + '"' +
+                        ' data-height="' + page.height + '"' +
+                        ' data-ocr-width="' + page.ocr_width + '"' +
+                        ' data-ocr-height="' + page.ocr_height + '">' +
+                        '<div class="page-number">第 ' + (page.page_num + 1) + ' 页 / 共 ' + result.pages.length + ' 页</div>' +
+                        '<div class="highlights-layer" id="highlights-' + page.page_num + '"></div></div>';
+                }
+                html += '</div>';
+                container.innerHTML = html;
+                showToast('PDF加载完成，共 ' + result.total_pages + ' 页');
+            } else {
+                container.innerHTML = '<div class="empty-state"><p>加载失败: ' + formatError(result.error) + '</p></div>';
+            }
+        }
+
+        function formatError(err) {
+            if (!err) return '未知错误';
+            if (typeof err === 'string') return err;
+            if (typeof err === 'object' && err.message) return err.message;
+            try { return JSON.stringify(err); } catch(e) { return String(err); }
+        }
+
+        function scrollPdfToElement(element) {
+            const container = document.getElementById('pdfContainer');
+            const cr = container.getBoundingClientRect();
+            const er = element.getBoundingClientRect();
+            const relativeTop = er.top - cr.top + container.scrollTop;
+            const target = relativeTop - (container.clientHeight - er.height) / 2;
+            container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        }
+
+        async function extractContractFields() {
+            if (!AppState.currentFile) { showToast('请先上传PDF文件'); return; }
+            if (!AppState.taskId) { showToast('任务ID丢失，请重新上传'); return; }
+
+            const btn = document.getElementById('extractContractBtn');
+            btn.disabled = true; btn.textContent = '查询中...';
+
+            // 先查询任务状态
+            let status = '';
+            const maxRetries = 80; // 最多轮询60次（约2分钟）
+            let retries = 0;
+
+            while (retries < maxRetries) {
+                const statusResult = await apiRequest('/api/task/status/' + AppState.taskId);
+                if (!statusResult.success) {
+                    btn.disabled = false; btn.textContent = '合同提取';
+                    showToast('查询任务状态失败: ' + (statusResult.message || ''));
+                    return;
+                }
+                status = statusResult.data.status;
+                if (status === 'completed') break;
+                if (status === 'failed') {
+                    btn.disabled = false; btn.textContent = '合同提取';
+                    showToast('任务执行失败，请重新上传');
+                    return;
+                }
+                // 等待30秒再查
+                await new Promise(resolve => setTimeout(resolve, 30000));
+                retries++;
+            }
+
+            if (status !== 'completed') {
+                btn.disabled = false; btn.textContent = '合同提取';
+                showToast('任务执行超时，请稍后再试');
+                return;
+            }
+
+            btn.textContent = '提取中...';
+
+            // 任务完成，调用 get_audit_result
+            const result = await apiRequest('/api/get_audit_result', {
+                method: 'POST',
+                body: JSON.stringify({
+                    contract_id: AppState.contractId,
+                    task_id: AppState.taskId
+                })
+            });
+
+            btn.disabled = false; btn.textContent = '合同提取';
+
+            if (result.success) {
+                AppState.checkInfo = result.check_info || [];
+                AppState.contractPositions = result.field_positions || {};
+                renderContractFields(result);
+                highlightContractFields(result.field_positions || {});
+                const totalFields = Object.keys(result.field_positions || {}).length;
+                showToast('成功提取 ' + totalFields + ' 个字段，共 ' + (result.check_info || []).length + ' 项检查');
+            } else {
+                showToast('合同字段提取失败: ' + (result.error || ''));
+            }
+        }
+
+        function renderContractFields(result) {
+            const container = document.getElementById('fieldsContent');
+            const stats = document.getElementById('contractStats');
+            const count = document.getElementById('contractFieldCount');
+
+            const checkInfo = result.check_info || [];
+            const positions = result.field_positions || {};
+
+            count.textContent = checkInfo.length;
+            stats.style.display = checkInfo.length > 0 ? 'flex' : 'none';
+
+            const passItems = checkInfo.filter(function(item) { return item.is_compliant; });
+            const failItems = checkInfo.filter(function(item) { return !item.is_compliant; });
+            document.getElementById('passCount').textContent = passItems.length;
+            document.getElementById('failCount').textContent = failItems.length;
+
+            if (checkInfo.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>未识别到合同字段</p></div>';
+                return;
+            }
+
+            let html = '';
+            let fieldIndex = 0;
+            for (const item of checkInfo) {
+                const fieldName = item.rule_name;
+                const fp = positions[fieldName] || [];
+                const pageNum = fp.length > 0 ? fp[0].page_num + 1 : '-';
+                const statusIcon = item.is_compliant ? '✅' : '❌';
+                const statusClass = item.is_compliant ? 'status-ok' : 'status-fail';
+
+                html += '<div class="field-card" data-contract-field-index="' + fieldIndex +
+                    '" onclick="locateContractField(\'' + fieldName.replace(/'/g, "\\'") + '\')">' +
+                    '<div class="field-card-header">' +
+                    '<span class="field-name">' + escapeHtml(item.rule_id) + ' | ' + escapeHtml(fieldName) + '</span>' +
+                    '<button class="btn-locate" onclick="event.stopPropagation(); locateContractField(\'' +
+                    fieldName.replace(/'/g, "\\'") + '\')">定位</button></div>' +
+                    '<div class="field-value" title="' + escapeHtml(item.conclusion || '') + '">' +
+                    '<span class="' + statusClass + '">' + statusIcon + ' ' + escapeHtml(item.conclusion || '') + '</span></div>' +
+                    '<div class="field-detail"><span class="field-label">判断理由：</span>' +
+                    '<span class="field-related-text" title="' + escapeHtml(item.reasoning || '') + '">' + escapeHtml(truncateText(item.reasoning, 80)) + '</span></div>' +
+                    '<div class="field-detail"><span class="field-label">原文：</span>' +
+                    '<span class="field-related-text" title="' + escapeHtml(item.origin_text || '') + '">' + escapeHtml(truncateText(item.origin_text, 60)) + '</span></div>' +
+                    '<div class="field-meta"><span class="field-page">第 ' + pageNum + ' 页</span></div></div>';
+                fieldIndex++;
+            }
+            container.innerHTML = html;
+        }
+
+        function truncateText(text, maxLen) {
+            if (!text) return '';
+            if (text.length <= maxLen) return text;
+            return text.substring(0, maxLen) + '...';
+        }
+
+        function highlightContractFields(fieldPositions) {
+            document.querySelectorAll('.highlight-box.contract-highlight').forEach(h => h.remove());
+
+            // 获取当前 PDF 加载的实际页码范围
+            const loadedPageNums = new Set();
+            document.querySelectorAll('.pdf-page').forEach(function(el) {
+                const id = el.id;
+                if (id && id.startsWith('page-')) {
+                    loadedPageNums.add(parseInt(id.replace('page-', '')));
+                }
+            });
+
+            const pageFields = {};
+            let fieldIndex = 0;
+
+            for (const [fieldName, positions] of Object.entries(fieldPositions)) {
+                positions.forEach((pos) => {
+                    let pageNum = pos.page_num;
+                    // 校验页码是否已加载，否则尝试偏移或兜底到0
+                    if (!loadedPageNums.has(pageNum)) {
+                        console.warn('[定位] 页码 ' + pageNum + ' 未加载，字段: ' + fieldName + '，内容: ' + (pos.content || ''));
+                        // 尝试用第一个可用页
+                        if (loadedPageNums.size > 0) {
+                            pageNum = Math.min(...loadedPageNums);
+                        } else {
+                            return; // 没有可用页面，跳过
+                        }
+                    }
+                    if (!pageFields[pageNum]) pageFields[pageNum] = [];
+                    pageFields[pageNum].push({ ...pos, page_num: pageNum, field_name: fieldName, index: fieldIndex++ });
+                });
+            }
+
+            for (const [pageNum, items] of Object.entries(pageFields)) {
+                const layer = document.getElementById('highlights-' + pageNum);
+                const pageEl = document.getElementById('page-' + pageNum);
+                if (!layer || !pageEl) continue;
+
+                const img = pageEl.querySelector('img');
+                const imgW = parseInt(img.dataset.width);
+                const imgH = parseInt(img.dataset.height);
+                const ocrW = parseFloat(img.dataset.ocrWidth);
+                const ocrH = parseFloat(img.dataset.ocrHeight);
+
+                items.forEach(item => {
+                    const hl = createContractHighlightBox(item, imgW, imgH, ocrW, ocrH);
+                    layer.appendChild(hl);
+                    AppState.highlights.push(hl);
+                });
+            }
+
+            setTimeout(() => {
+                document.querySelectorAll('.highlight-box.contract-highlight').forEach(h => h.classList.add('visible'));
+            }, 100);
+        }
+
+        function createContractHighlightBox(field, imgW, imgH, ocrW, ocrH) {
+            const bbox = field.bbox;
+            if (!bbox || bbox.length < 4) return document.createElement('div');
+
+            const sx = imgW / ocrW;
+            const sy = imgH / ocrH;
+            const x = bbox[0] * sx, y = bbox[1] * sy;
+            const w = (bbox[2] - bbox[0]) * sx, h = (bbox[3] - bbox[1]) * sy;
+
+            const div = document.createElement('div');
+            div.className = 'highlight-box contract-highlight';
+            div.dataset.contractFieldName = field.field_name;
+            div.style.left = (x / imgW * 100) + '%';
+            div.style.top = (y / imgH * 100) + '%';
+            div.style.width = (w / imgW * 100) + '%';
+            div.style.height = (h / imgH * 100) + '%';
+            div.title = field.field_name + ': ' + (field.content || '');
+            return div;
+        }
+
+        function locateContractField(fieldName) {
+            const fieldPositions = AppState.contractPositions?.[fieldName];
+            if (!fieldPositions || fieldPositions.length === 0) {
+                showToast('未找到该字段位置'); return;
+            }
+
+            document.querySelectorAll('.field-card').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('[data-contract-field-index]').forEach(card => {
+                const nameEl = card.querySelector('.field-name');
+                if (nameEl && nameEl.textContent === fieldName) {
+                    card.classList.add('active');
+                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            });
+
+            const highlights = document.querySelectorAll('.highlight-box.contract-highlight[data-contract-field-name="' + fieldName + '"]');
+            if (highlights.length > 0) {
+                document.querySelectorAll('.highlight-box').forEach(h => h.classList.remove('visible', 'active'));
+                highlights.forEach(h => h.classList.add('visible', 'active'));
+
+                // 定位到第一个高亮所在的页面
+                const pageEl = highlights[0].closest('.pdf-page');
+                if (pageEl) {
+                    scrollPdfToElement(pageEl);
+                } else {
+                    scrollPdfToElement(highlights[0]);
+                }
+                showToast('已定位: ' + fieldName);
+            }
+        }
+    </script>
+</body>
+</html>
