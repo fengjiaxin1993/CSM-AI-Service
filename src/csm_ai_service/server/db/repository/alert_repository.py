@@ -10,7 +10,12 @@ from sqlalchemy import desc, or_
 from csm_ai_service.server.db.models.alert_model import AlertReportModel, AlertRuleModel
 from csm_ai_service.server.db.session import with_session
 from csm_ai_service.server.db.repository.search_index import build_index_text, tokenize, calc_relevance_score
+import hashlib
 
+
+def gen_file_id(file_name: str, content_hash: str) -> str:
+    raw = f"{file_name}\0{content_hash}"  # 使用不可见空字符做分隔，不会和业务内容冲突
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 # ==================== 告警报告 CRUD ====================
 
@@ -21,37 +26,43 @@ def add_alert_report(
     file_name: str = "",
     alert_content: str = "",
     meta_info: Dict = None,
-    full_text: str = "",
-    table_data_text: str = "",
+    markdown: str = "",
     status: str = "cache",
-) -> int:
-    """新增告警处置报告，对告警内容自动构建全文索引，返回自增ID。默认status=cache（缓存状态）。
-    file_name作为唯一键，若已存在则返回已有ID。"""
-    if file_name:
-        existing = session.query(AlertReportModel).filter_by(file_name=file_name).first()
-        if existing:
-           return existing.id
+    content_hash: str = "",
+    file_id: str = ""
+) -> str:
+    """新增告警处置报告，对告警内容自动构建全文索引，返回file_id。默认status=cache（缓存状态）。
+
+    去重键file_id（确定性ID）：未显式传入时按 (file_name, content_hash) 自动生成，
+    同名同内容 -> 相同file_id -> 去重返回已有记录；同名不同内容 -> 不同file_id -> 新记录。
+    """
+    if not file_id:
+        file_id = gen_file_id(file_name, content_hash)
+    existing = session.query(AlertReportModel).filter_by(file_id=file_id).first()
+    if existing:
+        return existing.file_id
     keywords_index = build_index_text(alert_content)
     meta_info_str = json.dumps(meta_info, ensure_ascii=False) if meta_info else ""
     m = AlertReportModel(
+        file_id=file_id,
         report_title=report_title,
         file_name=file_name,
         alert_content=alert_content,
         meta_info=meta_info_str,
-        full_text=full_text,
-        table_data_text=table_data_text,
+        markdown=markdown,
         keywords_index=keywords_index,
         status=status,
+        content_hash=content_hash,
     )
     session.add(m)
     session.commit()
-    return m.id
+    return m.file_id
 
 
 @with_session
-def get_alert_report_by_id(session, report_id: int) -> Optional[dict]:
-    """根据ID获取告警报告"""
-    r = session.query(AlertReportModel).filter_by(id=report_id).first()
+def get_alert_report_by_file_id(session, file_id: str) -> Optional[dict]:
+    """根据file_id获取告警报告"""
+    r = session.query(AlertReportModel).filter_by(file_id=file_id).first()
     if r is None:
         return None
     return _report_to_dict(r)
@@ -59,8 +70,9 @@ def get_alert_report_by_id(session, report_id: int) -> Optional[dict]:
 
 @with_session
 def get_alert_report_by_file_name(session, file_name: str) -> Optional[dict]:
-    """根据file_name获取告警报告"""
-    r = session.query(AlertReportModel).filter_by(file_name=file_name).first()
+    """根据file_name获取告警报告（同名可能存在多条，返回最近更新的一条）"""
+    r = session.query(AlertReportModel).filter_by(file_name=file_name) \
+        .order_by(desc(AlertReportModel.update_time)).first()
     if r is None:
         return None
     return _report_to_dict(r)
@@ -84,17 +96,17 @@ def list_alert_reports(
 @with_session
 def update_alert_report(
     session,
-    report_id: int,
+    file_id: str,
     report_title: str = None,
     file_name: str = None,
     alert_content: str = None,
     meta_info: Dict = None,
-    full_text: str = None,
-    table_data_text: str = None,
+    markdown: str = None,
     status: str = None,
+    content_hash: str = None,
 ) -> bool:
     """更新告警报告，告警内容变更时自动重建全文索引"""
-    m = session.query(AlertReportModel).filter_by(id=report_id).first()
+    m = session.query(AlertReportModel).filter_by(file_id=file_id).first()
     if m is None:
         return False
     if report_title is not None:
@@ -105,12 +117,12 @@ def update_alert_report(
         m.alert_content = alert_content
     if meta_info is not None:
         m.meta_info = json.dumps(meta_info, ensure_ascii=False)
-    if full_text is not None:
-        m.full_text = full_text
-    if table_data_text is not None:
-        m.table_data_text = table_data_text
+    if markdown is not None:
+        m.markdown = markdown
     if status is not None:
         m.status = status
+    if content_hash is not None:
+        m.content_hash = content_hash
     # 重建索引（对告警内容建索引）
     m.keywords_index = build_index_text(m.alert_content or "")
     session.add(m)
@@ -119,9 +131,9 @@ def update_alert_report(
 
 
 @with_session
-def confirm_alert_report(session, report_id: int) -> bool:
+def confirm_alert_report(session, file_id: str) -> bool:
     """将告警报告从缓存状态确认保存为正式状态（status: cache -> saved）"""
-    m = session.query(AlertReportModel).filter_by(id=report_id).first()
+    m = session.query(AlertReportModel).filter_by(file_id=file_id).first()
     if m is None:
         return False
     m.status = "saved"
@@ -131,9 +143,9 @@ def confirm_alert_report(session, report_id: int) -> bool:
 
 
 @with_session
-def delete_alert_report(session, report_id: int) -> bool:
+def delete_alert_report(session, file_id: str) -> bool:
     """删除告警报告"""
-    result = session.query(AlertReportModel).filter_by(id=report_id).delete()
+    result = session.query(AlertReportModel).filter_by(file_id=file_id).delete()
     session.commit()
     return result > 0
 
@@ -294,13 +306,13 @@ def _report_to_dict(r: AlertReportModel) -> dict:
         except (json.JSONDecodeError, TypeError):
             meta_info = {}
     return {
-        "id": r.id,
+        "file_id": r.file_id,
         "report_title": r.report_title or "",
         "alert_content": r.alert_content or "",
         "meta_info": meta_info,
         "file_name": r.file_name or "",
-        "full_text": r.full_text or "",
-        "table_data_text": r.table_data_text or "",
+        "content_hash": r.content_hash or "",
+        "markdown": r.markdown or "",
         "status": r.status or "cache",
         "create_time": r.create_time.strftime("%Y-%m-%d %H:%M:%S") if r.create_time else None,
         "update_time": r.update_time.strftime("%Y-%m-%d %H:%M:%S") if r.update_time else None,
@@ -322,12 +334,13 @@ def _rule_to_dict(r: AlertRuleModel) -> dict:
 
 # Excel列头与字段的映射
 _EXPORT_COLUMNS = [
+    ("报告ID", "file_id"),
     ("报告标题", "report_title"),
     ("文件名称", "file_name"),
+    ("内容哈希", "content_hash"),
     ("告警内容", "alert_content"),
     ("告警元信息", "meta_info"),
-    ("文档段落文本", "full_text"),
-    ("文档表格数据", "table_data_text"),
+    ("文档全文", "markdown"),
     ("状态", "status"),
     ("创建时间", "create_time"),
     ("更新时间", "update_time"),
@@ -365,8 +378,8 @@ def export_alert_reports_to_excel(session) -> bytes:
             row.append(val)
         ws.append(row)
 
-    # 调整列宽
-    col_widths = [30, 25, 50, 40, 50, 50, 10, 20, 20]
+    # 调整列宽（与_EXPORT_COLUMNS的10列一一对应）
+    col_widths = [34, 30, 25, 18, 50, 40, 50, 10, 20, 20]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
 
@@ -378,7 +391,13 @@ def export_alert_reports_to_excel(session) -> bytes:
 
 @with_session
 def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
-    """从Excel文件导入告警处置报告，按file_name去重（已存在则跳过），返回导入结果统计"""
+    """从Excel文件导入告警处置报告，按file_id去重（已存在则跳过），返回导入结果统计。
+
+    file_id为确定性ID（file_name + content_hash 的SHA-256）：
+    - Excel中带file_id列（本项目导出的文件）：直接使用
+    - 无file_id列（旧格式Excel）：按 (file_name, content_hash) 自动计算，
+      同名同内容 -> 相同file_id -> 去重跳过；同名不同内容 -> 新记录
+    """
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True)
@@ -412,23 +431,27 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
                 return str(val) if val is not None else ""
 
             report_title = get_val("report_title")
+            file_id = get_val("file_id")
             file_name = get_val("file_name")
+            content_hash = get_val("content_hash")
             alert_content = get_val("alert_content")
             meta_info_str = get_val("meta_info")
-            full_text = get_val("full_text")
-            table_data_text = get_val("table_data_text")
+            markdown = get_val("markdown")
             status = get_val("status") or "cache"
 
             if not report_title:
                 errors.append(f"第{row_idx}行：报告标题为空，跳过")
                 continue
 
-            # 按file_name去重
-            if file_name:
-                existing = session.query(AlertReportModel).filter_by(file_name=file_name).first()
-                if existing:
-                    skipped += 1
-                    continue
+            # file_id缺失时按 (file_name, content_hash) 计算确定性ID
+            if not file_id:
+                file_id = gen_file_id(file_name, content_hash)
+
+            # 按file_id去重（同名同内容会生成相同file_id，跳过）
+            existing = session.query(AlertReportModel).filter_by(file_id=file_id).first()
+            if existing:
+                skipped += 1
+                continue
 
             # 解析meta_info
             meta_info = {}
@@ -442,14 +465,15 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
             meta_info_str_clean = json.dumps(meta_info, ensure_ascii=False) if meta_info else ""
 
             m = AlertReportModel(
+                file_id=file_id,
                 report_title=report_title,
                 file_name=file_name,
                 alert_content=alert_content,
                 meta_info=meta_info_str_clean,
-                full_text=full_text,
-                table_data_text=table_data_text,
+                markdown=markdown,
                 keywords_index=keywords_index,
                 status=status,
+                content_hash=content_hash,
             )
             session.add(m)
             session.commit()

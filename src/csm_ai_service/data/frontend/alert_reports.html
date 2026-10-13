@@ -379,11 +379,27 @@
             z-index: 101;
             flex-shrink: 0;
         }
+        .navbar {
+            flex-wrap: wrap;
+        }
         .navbar-brand {
             font-size: 16px; font-weight: 600; color: #fff;
             margin-right: 24px; padding: 12px 0; white-space: nowrap;
+            order: 1;
         }
-        .nav-links { display: flex; gap: 2px; align-items: center; }
+        .nav-links {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+            flex-wrap: wrap;
+            order: 2;
+        }
+        /* 第二行：告警处置报告系列，整行换行并加分隔线 */
+        .nav-links:nth-of-type(2) {
+            width: 100%;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            padding-left: 4px;
+        }
         .nav-link {
             padding: 12px 18px; border: none; border-radius: 0;
             cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
@@ -505,14 +521,17 @@
 </head>
 <body>
     <div class="navbar">
-        <span class="navbar-brand">审计服务</span>
         <div class="nav-links">
-            <a class="nav-link" href="/">首页</a>
-            <a class="nav-link" href="/contracts">合同管理</a>
-            <a class="nav-link" href="/rules">规则管理</a>
-            <a class="nav-link" href="/results">审核结果</a>
+            <a class="nav-link" href="/">防护方案审计预览</a>
+            <a class="nav-link" href="/contracts">防护方案报告</a>
+            <a class="nav-link" href="/rules">防护方案审计规则</a>
+            <a class="nav-link" href="/results">防护方案审计结果</a>
+        </div>
+        <div class="nav-links">
             <a class="nav-link active" href="/alert-reports">告警处置报告</a>
-            <a class="nav-link" href="/alert-rules">告警处置规则</a>
+            <a class="nav-link" href="/alert-rules">告警处置报告审计规则</a>
+            <a class="nav-link" href="/alert-results">告警处置报告审计结果</a>
+            <a class="nav-link" href="/alert-report-preview">告警处置报告审计预览</a>
             <a class="nav-link" href="/docs">API文档</a>
         </div>
     </div>
@@ -539,7 +558,7 @@
         <div class="toolbar">
             <div class="toolbar-left">
                 <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="搜索告警内容（jieba分词检索）...">
+                    <input type="text" id="searchInput" placeholder="搜索告警内容（jieba分词，仅检索已保存报告）...">
                 </div>
                 <select id="statusFilter" onchange="loadReports()">
                     <option value="">全部状态</option>
@@ -561,7 +580,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width:50px">ID</th>
+                        <th style="width:130px">文件ID</th>
                         <th style="width:200px">报告标题</th>
                         <th style="width:140px">文件名称</th>
                         <th style="width:280px">告警内容</th>
@@ -614,7 +633,7 @@
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <input type="hidden" id="reportId">
+                <input type="hidden" id="fileId">
                 <div class="form-group">
                     <label>报告标题 *</label>
                     <input type="text" id="reportTitle" placeholder="请输入报告标题">
@@ -632,6 +651,10 @@
                 <div class="form-group">
                     <label>告警元信息</label>
                     <textarea id="metaInfo" placeholder="请输入告警元信息（JSON格式）"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>文档全文 <span style="color:#999;font-size:12px">（markdown）</span></label>
+                    <textarea id="markdownText" class="large" placeholder="请输入文档全文（markdown）"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -777,27 +800,28 @@
             document.getElementById('uploadResultList').innerHTML = '';
 
             if (selectedFiles.length === 1) {
-                // 单文件直接用单文件上传接口
+                // 单文件也走批量上传接口（files列表）
                 const file = selectedFiles[0];
                 document.getElementById('progressFill').style.width = '50%';
                 document.getElementById('progressText').textContent = '正在上传: ' + file.name;
 
                 const formData = new FormData();
-                formData.append('file', file);
+                formData.append('files', file);
 
                 try {
-                    const response = await fetch(API_BASE_URL + '/api/alert-reports/upload', {
+                    const response = await fetch(API_BASE_URL + '/api/alert-reports/batch-upload', {
                         method: 'POST',
                         body: formData,
                     });
                     const result = await response.json();
                     document.getElementById('progressFill').style.width = '100%';
-                    if (result.success || (result.code && result.code === 200)) {
+                    const detail = result.data && result.data.details && result.data.details[0];
+                    if (result.success && detail && detail.status === 'success') {
                         document.getElementById('progressText').textContent = '上传完成';
                         showToast('上传成功');
                     } else {
                         document.getElementById('progressText').textContent = '上传失败';
-                        showToast('上传失败: ' + (result.message || result.msg || '未知错误'), 'error');
+                        showToast('上传失败: ' + (detail && detail.message || result.message || '未知错误'), 'error');
                     }
                 } catch (error) {
                     document.getElementById('progressText').textContent = '上传异常';
@@ -816,20 +840,21 @@
                     document.getElementById('progressText').textContent = '正在上传: ' + file.name + ' (' + (i + 1) + '/' + selectedFiles.length + ')';
 
                     const formData = new FormData();
-                    formData.append('file', file);
+                    formData.append('files', file);
 
                     try {
-                        const response = await fetch(API_BASE_URL + '/api/alert-reports/upload', {
+                        const response = await fetch(API_BASE_URL + '/api/alert-reports/batch-upload', {
                             method: 'POST',
                             body: formData,
                         });
                         const result = await response.json();
-                        if (result.success || (result.code && result.code === 200)) {
+                        const detail = result.data && result.data.details && result.data.details[0];
+                        if (result.success && detail && detail.status === 'success') {
                             successCount++;
-                            resultList.push({ name: file.name, status: 'success', message: result.msg || '成功' });
+                            resultList.push({ name: file.name, status: 'success', message: detail.message || '成功' });
                         } else {
                             failCount++;
-                            resultList.push({ name: file.name, status: 'fail', message: result.message || result.msg || '未知错误' });
+                            resultList.push({ name: file.name, status: 'fail', message: (detail && detail.message) || result.message || '未知错误' });
                         }
                     } catch (error) {
                         failCount++;
@@ -929,20 +954,20 @@
                     ? '<span class="status-badge status-saved">已保存</span>'
                     : '<span class="status-badge status-cache">缓存</span>';
                 const confirmBtn = r.status !== 'saved'
-                    ? '<button class="btn-confirm" onclick="confirmReport(' + r.id + ')">确认保存</button>'
+                    ? '<button class="btn-confirm" onclick="confirmReport(\'' + r.file_id + '\')">确认保存</button>'
                     : '';
                 html += '<tr>' +
-                    '<td>' + r.id + '</td>' +
+                    '<td title="' + escapeHtml(r.file_id) + '"><span class="text-truncate" style="max-width:130px;display:inline-block">' + escapeHtml(r.file_id || '-') + '</span></td>' +
                     '<td title="' + escapeHtml(r.report_title) + '"><strong class="text-truncate">' + escapeHtml(r.report_title || '-') + '</strong></td>' +
                     '<td>' + escapeHtml(r.file_name || '-') + '</td>' +
                     '<td class="text-truncate-wide" title="' + escapeHtml(r.alert_content) + '">' + escapeHtml(r.alert_content || '-') + '</td>' +
                     '<td>' + statusLabel + '</td>' +
                     '<td>' + (r.update_time || '-') + '</td>' +
                     '<td><div class="rule-actions">' +
-                        '<button class="btn-view" onclick="viewReport(' + r.id + ')">详情</button>' +
-                        '<button class="btn-edit" onclick="editReport(' + r.id + ')">编辑</button>' +
+                        '<button class="btn-view" onclick="viewReport(\'' + r.file_id + '\')">详情</button>' +
+                        '<button class="btn-edit" onclick="editReport(\'' + r.file_id + '\')">编辑</button>' +
                         confirmBtn +
-                        '<button class="btn-delete" onclick="deleteReport(' + r.id + ')">删除</button>' +
+                        '<button class="btn-delete" onclick="deleteReport(\'' + r.file_id + '\')">删除</button>' +
                     '</div></td>' +
                 '</tr>';
             });
@@ -974,34 +999,34 @@
 
         function showAddModal() {
             document.getElementById('modalTitle').textContent = '新建报告';
-            document.getElementById('reportId').value = '';
+            document.getElementById('fileId').value = '';
             document.getElementById('reportTitle').value = '';
             document.getElementById('fileName').value = '';
             document.getElementById('alertContent').value = '';
             document.getElementById('metaInfo').value = '';
-            document.getElementById('fullReport').value = '';
+            document.getElementById('markdownText').value = '';
             document.getElementById('reportModal').classList.add('active');
         }
 
-        async function editReport(reportId) {
-            const result = await apiRequest('/api/alert-reports/detail/' + reportId);
+        async function editReport(fileId) {
+            const result = await apiRequest('/api/alert-reports/detail/' + fileId);
             if (result.success && result.data) {
                 const r = result.data;
                 document.getElementById('modalTitle').textContent = '编辑报告';
-                document.getElementById('reportId').value = r.id;
+                document.getElementById('fileId').value = r.file_id;
                 document.getElementById('reportTitle').value = r.report_title || '';
                 document.getElementById('fileName').value = r.file_name || '';
                 document.getElementById('alertContent').value = r.alert_content || '';
                 document.getElementById('metaInfo').value = r.meta_info ? JSON.stringify(r.meta_info, null, 2) : '';
-                document.getElementById('fullReport').value = r.full_report || '';
+                document.getElementById('markdownText').value = r.markdown || '';
                 document.getElementById('reportModal').classList.add('active');
             } else {
                 showToast('获取报告详情失败', 'error');
             }
         }
 
-        async function viewReport(reportId) {
-            const result = await apiRequest('/api/alert-reports/detail/' + reportId);
+        async function viewReport(fileId) {
+            const result = await apiRequest('/api/alert-reports/detail/' + fileId);
             if (result.success && result.data) {
                 const r = result.data;
                 const statusLabel = r.status === 'saved'
@@ -1010,20 +1035,19 @@
                 document.getElementById('detailContent').innerHTML =
                     '<div class="detail-section"><h3>基本信息</h3>' +
                     '<div class="detail-field"><span class="detail-label">报告标题</span><span class="detail-value">' + escapeHtml(r.report_title) + '</span></div>' +
+                    '<div class="detail-field"><span class="detail-label">文件ID</span><span class="detail-value">' + escapeHtml(r.file_id || '-') + '</span></div>' +
                     '<div class="detail-field"><span class="detail-label">文件名称</span><span class="detail-value">' + escapeHtml(r.file_name || '-') + '</span></div>' +
+                    '<div class="detail-field"><span class="detail-label">内容哈希</span><span class="detail-value">' + escapeHtml(r.content_hash || '-') + '</span></div>' +
                     '<div class="detail-field"><span class="detail-label">状态</span><span class="detail-value">' + statusLabel + '</span></div>' +
                     '</div>' +
                     '<div class="detail-section"><h3>告警内容</h3>' +
                     '<div class="detail-value" style="background:#fff8e1;padding:10px;border-radius:6px;white-space:pre-wrap;">' + escapeHtml(r.alert_content || '-') + '</div>' +
                     '</div>' +
                     '<div class="detail-section"><h3>告警元信息</h3>' +
-                    '<div class="detail-value" style="background:#f5f5f5;padding:10px;border-radius:6px;white-space:pre-wrap;max-height:200px;overflow-y:auto;">' + (r.meta_info ? escapeHtml(JSON.stringify(r.meta_info, null, 2)) : '-') + '</div>' +
+                    '<div class="detail-value" style="background:#f5f5f5;padding:10px;border-radius:6px;white-space:pre-wrap;max-height:200px;overflow-y:auto;">' + (r.meta_info && Object.keys(r.meta_info).length ? escapeHtml(JSON.stringify(r.meta_info, null, 2)) : '-') + '</div>' +
                     '</div>' +
-                    '<div class="detail-section"><h3>文档段落文本</h3>' +
-                    '<div class="detail-value" style="background:#f5f5f5;padding:10px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto;">' + escapeHtml(r.full_text || '-') + '</div>' +
-                    '</div>' +
-                    '<div class="detail-section"><h3>文档表格数据</h3>' +
-                    '<div class="detail-value" style="background:#f5f5f5;padding:10px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto;">' + escapeHtml(r.table_data_text || '-') + '</div>' +
+                    '<div class="detail-section"><h3>文档全文</h3>' +
+                    '<div class="detail-value" style="background:#f5f5f5;padding:10px;border-radius:6px;white-space:pre-wrap;max-height:300px;overflow-y:auto;">' + escapeHtml(r.markdown || '-') + '</div>' +
                     '</div>' +
                     '<div class="detail-section"><h3>时间</h3>' +
                     '<div class="detail-field"><span class="detail-label">创建时间</span><span class="detail-value">' + (r.create_time || '-') + '</span></div>' +
@@ -1044,24 +1068,25 @@
         }
 
         async function saveReport() {
-            const reportId = document.getElementById('reportId').value;
+            const fileId = document.getElementById('fileId').value;
             const reportTitle = document.getElementById('reportTitle').value.trim();
             if (!reportTitle) {
                 showToast('请输入报告标题', 'error');
                 return;
             }
 
+            const metaInfoRaw = document.getElementById('metaInfo').value.trim();
             const data = {
                 report_title: reportTitle,
                 file_name: document.getElementById('fileName').value.trim(),
                 alert_content: document.getElementById('alertContent').value.trim(),
-                meta_info: JSON.parse(document.getElementById('metaInfo').value.trim() || '{}'),
-                full_report: document.getElementById('fullReport').value.trim(),
+                meta_info: metaInfoRaw ? JSON.parse(metaInfoRaw) : null,
+                markdown: document.getElementById('markdownText').value.trim(),
             };
 
             let result;
-            if (reportId) {
-                result = await apiRequest('/api/alert-reports/update/' + reportId, {
+            if (fileId) {
+                result = await apiRequest('/api/alert-reports/update/' + fileId, {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
@@ -1073,7 +1098,7 @@
             }
 
             if (result.success) {
-                showToast(reportId ? '报告更新成功' : '报告创建成功');
+                showToast(fileId ? '报告更新成功' : '报告创建成功');
                 closeModal();
                 loadReports();
             } else {
@@ -1081,10 +1106,10 @@
             }
         }
 
-        async function confirmReport(reportId) {
+        async function confirmReport(fileId) {
             if (!confirm('确认保存该报告？确认后将标记为正式保存状态。')) return;
 
-            const result = await apiRequest('/api/alert-reports/confirm/' + reportId, { method: 'POST' });
+            const result = await apiRequest('/api/alert-reports/confirm/' + fileId, { method: 'POST' });
             if (result.success) {
                 showToast('报告确认保存成功');
                 loadReports();
@@ -1093,10 +1118,10 @@
             }
         }
 
-        async function deleteReport(reportId) {
+        async function deleteReport(fileId) {
             if (!confirm('确定要删除这条报告吗？此操作不可恢复。')) return;
 
-            const result = await apiRequest('/api/alert-reports/delete/' + reportId, { method: 'POST' });
+            const result = await apiRequest('/api/alert-reports/delete/' + fileId, { method: 'POST' });
             if (result.success) {
                 showToast('报告删除成功');
                 loadReports();

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>告警处置报告审计任务</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        .cr-header {
+            background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+            color: white;
+            padding: 20px 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .cr-header h1 {
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* 选择面板 */
+        .select-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .select-panel label {
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .select-panel input {
+            padding: 10px 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 340px;
+            outline: none;
+        }
+
+        .select-panel input:focus { border-color: #e65100; }
+
+        .select-panel select {
+            padding: 10px 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            background: white;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-primary { background: #e65100; color: white; }
+        .btn-primary:hover { background: #bf360c; }
+        .btn-secondary { background: #607d8b; color: white; }
+        .btn-secondary:hover { background: #455a64; }
+
+        /* 统计卡片 */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #e65100;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label { color: #666; font-size: 14px; }
+        .stat-card.done .number { color: #4caf50; }
+        .stat-card.running .number { color: #1565c0; }
+        .stat-card.failed .number { color: #f44336; }
+
+        /* 状态徽章 */
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+            white-space: nowrap;
+        }
+        .status-pending { background: #fff3e0; color: #e65100; }
+        .status-processing { background: #e3f2fd; color: #1565c0; }
+        .status-pdf_done { background: #f3e5f5; color: #6a1b9a; }
+        .status-completed { background: #e8f5e9; color: #2e7d32; }
+        .status-failed { background: #ffebee; color: #c62828; }
+        .sub-pending { background: #eceff1; color: #546e7a; }
+        .sub-processing { background: #e3f2fd; color: #1565c0; }
+        .sub-done { background: #e8f5e9; color: #2e7d32; }
+        .sub-failed { background: #ffebee; color: #c62828; }
+
+        /* 表格 */
+        .results-table {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .table-title {
+            padding: 15px 20px 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .results-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table th {
+            background: #f5f7fa;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 14px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .results-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 13px;
+            color: #4a5568;
+            vertical-align: top;
+        }
+
+        .results-table tr:hover { background: #f8f9fa; }
+
+        .text-ellipsis {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .clickable-text { color: #1565c0; cursor: pointer; }
+        .clickable-text:hover { text-decoration: underline; }
+
+        .rule-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+
+        .rule-actions button {
+            padding: 5px 10px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-view { background: #0288d1; color: white; }
+        .btn-view:hover { background: #0277bd; }
+        .btn-delete { background: #f44336; color: white; }
+        .btn-delete:hover { background: #da190b; }
+        .btn-goto { background: #e65100; color: white; }
+        .btn-goto:hover { background: #bf360c; }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success { background: #4caf50; }
+        .toast.error { background: #f44336; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 860px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+
+        .modal-header h2 { font-size: 20px; color: #2d3748; }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #718096;
+        }
+
+        .modal-body { padding: 20px; }
+
+        .modal-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .detail-section { margin-bottom: 20px; }
+
+        .detail-section h3 {
+            font-size: 16px;
+            color: #e65100;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #ffe0b2;
+        }
+
+        .detail-field { margin-bottom: 12px; }
+
+        .detail-field .field-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .detail-field .field-value {
+            color: #333;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        /* 研判徽章（弹窗内） */
+        .audit-badge {
+            padding: 5px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .audit-badge.pass { background: #e8f5e9; color: #2e7d32; }
+        .audit-badge.reject { background: #ffebee; color: #c62828; }
+        .audit-badge.review { background: #fff3e0; color: #e65100; }
+        .audit-badge.default { background: #eceff1; color: #455a64; }
+
+        /* 原文定位条目（弹窗内） */
+        .pos-item {
+            background: #f5f7fa;
+            border-left: 3px solid #e65100;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #4a5568;
+        }
+        .pos-item .pos-meta { color: #999; font-size: 12px; margin-top: 2px; }
+
+        /* 错误信息（弹窗内） */
+        .error-box {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            word-break: break-all;
+            margin-bottom: 15px;
+        }
+
+        .navbar {
+            background: #1565c0;
+            border-bottom: 1px solid #0d47a1;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            z-index: 101;
+            flex-shrink: 0;
+        }
+        .navbar {
+            flex-wrap: wrap;
+        }
+        .navbar-brand {
+            font-size: 16px; font-weight: 600; color: #fff;
+            margin-right: 24px; padding: 12px 0; white-space: nowrap;
+            order: 1;
+        }
+        .nav-links {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+            flex-wrap: wrap;
+            order: 2;
+        }
+        /* 第二行：告警处置报告系列，整行换行并加分隔线 */
+        .nav-links:nth-of-type(2) {
+            width: 100%;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            padding-left: 4px;
+        }
+        .nav-link {
+            padding: 12px 18px; border: none; border-radius: 0;
+            cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
+            background: transparent; transition: all 0.2s; display: inline-block;
+        }
+        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .nav-link.active { color: #fff; background: rgba(255,255,255,0.2); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="nav-links">
+            <a class="nav-link" href="/">防护方案审计预览</a>
+            <a class="nav-link" href="/contracts">防护方案报告</a>
+            <a class="nav-link" href="/rules">防护方案审计规则</a>
+            <a class="nav-link" href="/results">防护方案审计结果</a>
+        </div>
+        <div class="nav-links">
+            <a class="nav-link" href="/alert-reports">告警处置报告</a>
+            <a class="nav-link" href="/alert-rules">告警处置报告审计规则</a>
+            <a class="nav-link active" href="/alert-results">告警处置报告审计结果</a>
+            <a class="nav-link" href="/alert-report-preview">告警处置报告审计预览</a>
+            <a class="nav-link" href="/docs">API文档</a>
+        </div>
+    </div>
+    <div class="cr-header">
+        <h1>📋 告警处置报告审计任务</h1>
+    </div>
+
+    <div class="container">
+        <!-- 查询面板 -->
+        <div class="select-panel">
+            <label for="taskIdInput">任务 ID：</label>
+            <input type="text" id="taskIdInput" placeholder="输入 task_id 查询任务详情" onkeypress="if(event.key==='Enter')queryTask()">
+            <button class="btn btn-primary" onclick="queryTask()">🔍 查询任务</button>
+            <select id="statusFilter" onchange="loadTasks()">
+                <option value="">全部状态</option>
+                <option value="pending">pending 排队中</option>
+                <option value="pdf_processing">pdf_processing 解析中</option>
+                <option value="pdf_done">pdf_done 解析完成</option>
+                <option value="audit_processing">audit_processing 审计中</option>
+                <option value="completed">completed 已完成</option>
+                <option value="failed">failed 失败</option>
+            </select>
+            <button class="btn btn-secondary" onclick="loadTasks()">🔄 刷新任务列表</button>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats" id="statsRow" style="display:none;">
+            <div class="stat-card">
+                <div class="number" id="totalTasks">-</div>
+                <div class="label">任务总数</div>
+            </div>
+            <div class="stat-card done">
+                <div class="number" id="doneTasks">-</div>
+                <div class="label">✅ 已完成</div>
+            </div>
+            <div class="stat-card running">
+                <div class="number" id="runningTasks">-</div>
+                <div class="label">⏳ 处理中</div>
+            </div>
+            <div class="stat-card failed">
+                <div class="number" id="failedTasks">-</div>
+                <div class="label">❌ 失败</div>
+            </div>
+        </div>
+
+        <!-- 任务列表表格 -->
+        <div class="results-table">
+            <div class="table-title">🗂 审计任务列表（alert_report_task）</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:220px">任务ID</th>
+                        <th style="width:180px">文件名</th>
+                        <th style="width:130px">状态</th>
+                        <th style="width:110px">PDF阶段</th>
+                        <th style="width:110px">审计阶段</th>
+                        <th style="width:150px">创建时间</th>
+                        <th style="width:230px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="tasksTableBody">
+                    <tr><td colspan="7" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 任务ID/文件名 查看弹窗（仅显示完整内容） -->
+    <div class="modal-overlay" id="textInfoModal">
+        <div class="modal" style="max-width:600px">
+            <div class="modal-header">
+                <h2 id="textInfoTitle">信息查看</h2>
+                <button class="modal-close" onclick="closeTextInfo()">&times;</button>
+            </div>
+            <div class="modal-body" id="textInfoBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTextInfo()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看结果弹窗（完整任务信息 + 研判结果 + 问题列表） -->
+    <div class="modal-overlay" id="taskResultModal">
+        <div class="modal" style="max-width:1000px">
+            <div class="modal-header">
+                <h2 id="taskResultTitle">任务审计结果</h2>
+                <button class="modal-close" onclick="closeTaskResult()">&times;</button>
+            </div>
+            <div class="modal-body" id="taskResultBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-goto" id="taskResultPreviewBtn" onclick="openTaskById(currentTaskId)">🖼 打开审计预览</button>
+                <button class="btn btn-secondary" onclick="closeTaskResult()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        function showToast(message, type) {
+            type = type || 'success';
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        async function apiRequest(endpoint, options) {
+            options = options || {};
+            const url = API_BASE_URL + endpoint;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('API请求失败:', error);
+                showToast('请求失败: ' + error.message, 'error');
+                return { success: false, message: error.message };
+            }
+        }
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        function getStatusBadge(status) {
+            const map = {
+                'pending': 'status-pending',
+                'pdf_processing': 'status-processing',
+                'pdf_done': 'status-pdf_done',
+                'audit_processing': 'status-processing',
+                'completed': 'status-completed',
+                'failed': 'status-failed'
+            };
+            const cls = map[status] || 'status-pending';
+            return '<span class="status-badge ' + cls + '">' + escapeHtml(status || '-') + '</span>';
+        }
+
+        function getSubStatusBadge(status) {
+            const map = {
+                'pending': 'sub-pending',
+                'processing': 'sub-processing',
+                'done': 'sub-done',
+                'failed': 'sub-failed'
+            };
+            const cls = map[status] || 'sub-pending';
+            return '<span class="status-badge ' + cls + '">' + escapeHtml(status || '-') + '</span>';
+        }
+
+        // ==================== 任务列表（list_alert_report_tasks） ====================
+
+        async function loadTasks() {
+            const tbody = document.getElementById('tasksTableBody');
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">加载中...</td></tr>';
+
+            const statusFilter = document.getElementById('statusFilter').value;
+            let url = '/api/alert-report-tasks?limit=200';
+            if (statusFilter) url += '&status=' + encodeURIComponent(statusFilter);
+
+            const result = await apiRequest(url);
+            if (result.success && result.data && result.data.tasks) {
+                const tasks = result.data.tasks;
+                renderStats(tasks);
+                renderTasksTable(tasks);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">加载失败: ' + escapeHtml(result.message || '未知错误') + '</td></tr>';
+            }
+        }
+
+        function renderStats(tasks) {
+            document.getElementById('statsRow').style.display = 'grid';
+            document.getElementById('totalTasks').textContent = tasks.length;
+            document.getElementById('doneTasks').textContent = tasks.filter(t => t.status === 'completed').length;
+            document.getElementById('runningTasks').textContent = tasks.filter(t => ['pending', 'pdf_processing', 'pdf_done', 'audit_processing'].indexOf(t.status) >= 0).length;
+            document.getElementById('failedTasks').textContent = tasks.filter(t => t.status === 'failed').length;
+        }
+
+        let allTasks = [];
+
+        function renderTasksTable(tasks) {
+            allTasks = tasks;
+            const tbody = document.getElementById('tasksTableBody');
+            if (tasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无任务，可在"审计预览"页面上传PDF创建任务</td></tr>';
+                return;
+            }
+
+            let html = '';
+            tasks.forEach(function(t, index) {
+                html += '<tr>' +
+                    '<td><span class="text-ellipsis clickable-text" title="' + escapeHtml(t.task_id) + '" onclick="showTaskText(' + index + ', \'task_id\')">' + escapeHtml(t.task_id) + '</span></td>' +
+                    '<td><span class="text-ellipsis clickable-text" title="' + escapeHtml(t.file_name) + '" onclick="showTaskText(' + index + ', \'file_name\')">' + escapeHtml(t.file_name || '-') + '</span></td>' +
+                    '<td>' + getStatusBadge(t.status) + '</td>' +
+                    '<td>' + getSubStatusBadge(t.pdf_status) + '</td>' +
+                    '<td>' + getSubStatusBadge(t.audit_status) + '</td>' +
+                    '<td>' + escapeHtml(t.create_time || '-') + '</td>' +
+                    '<td><div class="rule-actions">' +
+                        '<button class="btn-view" onclick="viewTask(\'' + escapeHtml(t.task_id) + '\')">查看结果</button>' +
+                        '<button class="btn-goto" onclick="openTaskById(\'' + escapeHtml(t.task_id) + '\')">打开预览</button>' +
+                        '<button class="btn-delete" onclick="deleteTask(\'' + escapeHtml(t.task_id) + '\')">删除</button>' +
+                    '</div></td>' +
+                '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        // ==================== 单任务查询 → 弹窗显示结果 ====================
+
+        let currentTaskId = '';
+
+        function queryTask() {
+            const taskId = document.getElementById('taskIdInput').value.trim();
+            if (!taskId) {
+                showToast('请输入任务ID', 'error');
+                return;
+            }
+            viewTask(taskId);
+        }
+
+        async function viewTask(taskId) {
+            const result = await apiRequest('/api/alert-report-tasks/' + encodeURIComponent(taskId));
+            if (result.success && result.data) {
+                currentTaskId = taskId;
+                renderTaskResultModal(result.data);
+            } else {
+                showToast('查询失败: ' + (result.message || '任务不存在'), 'error');
+            }
+        }
+
+        function getAuditResultBadge(text) {
+            const t = text || '';
+            let cls = 'default';
+            if (t.indexOf('驳回') >= 0) cls = 'reject';
+            else if (t.indexOf('复核') >= 0) cls = 'review';
+            else if (t.indexOf('通过') >= 0 || t.indexOf('合格') >= 0) cls = 'pass';
+            return '<span class="audit-badge ' + cls + '">' + escapeHtml(t || '无结果') + '</span>';
+        }
+
+        function renderTaskResultModal(task) {
+            const t = task;
+            const resultJson = (t.result_json && typeof t.result_json === 'object') ? t.result_json : {};
+            const problems = resultJson.problem_list || [];
+
+            let html = '';
+
+            // 基本信息
+            html += '<div class="detail-section"><h3>基本信息</h3>' +
+                '<div class="detail-field"><div class="field-label">任务ID（task_id）</div><div class="field-value">' + escapeHtml(t.task_id) + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">文件ID（file_id）</div><div class="field-value">' + escapeHtml(t.file_id || '-') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">文件名（file_name）</div><div class="field-value">' + escapeHtml(t.file_name || '-') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">内容哈希（content_hash）</div><div class="field-value">' + escapeHtml(t.content_hash || '-') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">PDF文件路径（file_path）</div><div class="field-value">' + escapeHtml(t.file_path || '-') + '</div></div>' +
+                '</div>';
+
+            // 任务状态
+            html += '<div class="detail-section"><h3>任务状态</h3>' +
+                '<div class="detail-field"><div class="field-label">总状态（status）</div><div class="field-value">' + getStatusBadge(t.status) + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">PDF解析阶段（pdf_status）</div><div class="field-value">' + getSubStatusBadge(t.pdf_status) + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">审计阶段（audit_status）</div><div class="field-value">' + getSubStatusBadge(t.audit_status) + '</div></div>' +
+                '</div>';
+
+            // 错误信息
+            if (t.error_message) {
+                html += '<div class="error-box">❌ 错误信息: ' + escapeHtml(t.error_message) + '</div>';
+            }
+
+            // 时间记录
+            html += '<div class="detail-section"><h3>时间记录</h3>' +
+                '<div class="detail-field"><div class="field-label">创建时间（create_time）</div><div class="field-value">' + escapeHtml(t.create_time || '-') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">更新时间（update_time）</div><div class="field-value">' + escapeHtml(t.update_time || '-') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">PDF解析（pdf_start_time ~ pdf_end_time）</div><div class="field-value">' + escapeHtml(t.pdf_start_time || '-') + ' ~ ' + escapeHtml(t.pdf_end_time || '-') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">审计（audit_start_time ~ audit_end_time）</div><div class="field-value">' + escapeHtml(t.audit_start_time || '-') + ' ~ ' + escapeHtml(t.audit_end_time || '-') + '</div></div>' +
+                '</div>';
+
+            // 研判结果
+            html += '<div class="detail-section"><h3>研判结果（result_json）</h3>' +
+                '<div class="detail-field"><div class="field-label">AI研判结论（audit_result）</div><div class="field-value">' + getAuditResultBadge(resultJson.audit_result) + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">审核结论（conclusion）</div><div class="field-value">' + escapeHtml(resultJson.conclusion || '暂无') + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">研判详情（audit_details）</div><div class="field-value">' + escapeHtml(resultJson.audit_details || '暂无') + '</div></div>' +
+                '</div>';
+
+            // 问题列表
+            html += '<div class="detail-section"><h3>问题与定位（problem_list，共 ' + problems.length + ' 个）</h3>';
+            if (problems.length === 0) {
+                html += '<div class="field-value">暂无问题列表</div>';
+            } else {
+                problems.forEach(function(p, index) {
+                    const positions = p.field_positions || [];
+                    let posHtml = '';
+                    if (positions.length > 0) {
+                        positions.forEach(function(pos, i) {
+                            posHtml += '<div class="pos-item">' +
+                                '<div>' + (i + 1) + '. ' + escapeHtml(pos.block_content || '-') + '</div>' +
+                                '<div class="pos-meta">页码: ' + escapeHtml(pos.page_num != null ? pos.page_num : '-') +
+                                ' | bbox: ' + escapeHtml(JSON.stringify(pos.block_bbox || [])) + '</div>' +
+                            '</div>';
+                        });
+                    } else {
+                        posHtml = '<div class="field-value">未匹配到原文位置</div>';
+                    }
+                    html += '<div class="detail-field">' +
+                        '<div class="field-label">问题 ' + (index + 1) + '：' + escapeHtml(p.text || '-') + '</div>' +
+                        '<div class="detail-field" style="margin:8px 0 8px 12px"><div class="field-label">原因分析</div><div class="field-value">' + escapeHtml(p.cause || '-') + '</div></div>' +
+                        '<div class="detail-field" style="margin:8px 0 8px 12px"><div class="field-label">整改建议</div><div class="field-value">' + escapeHtml(p.suggest || '-') + '</div></div>' +
+                        '<div class="detail-field" style="margin:8px 0 8px 12px"><div class="field-label">原文定位（' + positions.length + ' 处）</div>' + posHtml + '</div>' +
+                        '</div>';
+                });
+            }
+            html += '</div>';
+
+            document.getElementById('taskResultTitle').textContent = '任务审计结果 - ' + (t.file_name || t.task_id);
+            document.getElementById('taskResultBody').innerHTML = html;
+            document.getElementById('taskResultModal').classList.add('active');
+        }
+
+        function closeTaskResult() {
+            document.getElementById('taskResultModal').classList.remove('active');
+        }
+
+        // ==================== 任务ID/文件名 查看弹窗（只显示，不影响页面其他内容） ====================
+
+        function showTaskText(index, field) {
+            const t = allTasks[index];
+            if (!t) return;
+            const title = (field === 'file_name') ? '文件名查看' : '任务ID查看';
+            document.getElementById('textInfoTitle').textContent = title;
+            document.getElementById('textInfoBody').innerHTML =
+                '<div class="detail-field"><div class="field-label">任务ID（task_id）</div>' +
+                '<div class="field-value">' + escapeHtml(t.task_id) + '</div></div>' +
+                '<div class="detail-field"><div class="field-label">文件名（file_name）</div>' +
+                '<div class="field-value">' + escapeHtml(t.file_name || '-') + '</div></div>';
+            document.getElementById('textInfoModal').classList.add('active');
+        }
+
+        function closeTextInfo() {
+            document.getElementById('textInfoModal').classList.remove('active');
+        }
+
+        // ==================== 删除任务（delete_alert_report_task） ====================
+
+        async function deleteTask(taskId) {
+            if (!confirm('确定要删除该任务吗？任务记录将不可恢复。')) return;
+
+            const result = await apiRequest('/api/alert-report-tasks/delete/' + encodeURIComponent(taskId), { method: 'POST' });
+            if (result.success) {
+                showToast('任务删除成功');
+                loadTasks();
+            } else {
+                showToast(result.message || '删除失败', 'error');
+            }
+        }
+
+        // ==================== 跳转预览页 ====================
+
+        function openTaskById(taskId) {
+            window.open('/alert-report-preview?task_id=' + encodeURIComponent(taskId), '_blank');
+        }
+
+        // 点击弹窗外部关闭
+        document.getElementById('textInfoModal').addEventListener('click', function(e) {
+            if (e.target === this) closeTextInfo();
+        });
+        document.getElementById('taskResultModal').addEventListener('click', function(e) {
+            if (e.target === this) closeTaskResult();
+        });
+
+        // 页面加载
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTasks();
+        });
+    </script>
+</body>
+</html>

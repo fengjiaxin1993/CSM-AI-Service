@@ -8,3 +8,4 @@ from .audit_rule_model import AuditRuleModel
 from .contract_model import ContractModel
 from .task_model import TaskModel
 from .alert_model import AlertReportModel, AlertRuleModel
+from .alert_report_task_model import AlertReportTaskModel

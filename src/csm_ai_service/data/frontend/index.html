@@ -214,11 +214,27 @@
             z-index: 101;
             flex-shrink: 0;
         }
+        .navbar {
+            flex-wrap: wrap;
+        }
         .navbar-brand {
             font-size: 16px; font-weight: 600; color: #fff;
             margin-right: 24px; padding: 12px 0; white-space: nowrap;
+            order: 1;
         }
-        .nav-links { display: flex; gap: 2px; align-items: center; }
+        .nav-links {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+            flex-wrap: wrap;
+            order: 2;
+        }
+        /* 第二行：告警处置报告系列，整行换行并加分隔线 */
+        .nav-links:nth-of-type(2) {
+            width: 100%;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            padding-left: 4px;
+        }
         .nav-link {
             padding: 12px 18px; border: none; border-radius: 0;
             cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
@@ -232,19 +248,22 @@
 </head>
 <body>
     <div class="navbar">
-        <span class="navbar-brand">审计服务</span>
         <div class="nav-links">
-            <a class="nav-link active" href="/">首页</a>
-            <a class="nav-link" href="/contracts">合同管理</a>
-            <a class="nav-link" href="/rules">规则管理</a>
-            <a class="nav-link" href="/results">审核结果</a>
+            <a class="nav-link active" href="/">防护方案审计预览</a>
+            <a class="nav-link" href="/contracts">防护方案报告</a>
+            <a class="nav-link" href="/rules">防护方案审计规则</a>
+            <a class="nav-link" href="/results">防护方案审计结果</a>
+        </div>
+        <div class="nav-links">
             <a class="nav-link" href="/alert-reports">告警处置报告</a>
-            <a class="nav-link" href="/alert-rules">告警处置规则</a>
+            <a class="nav-link" href="/alert-rules">告警处置报告审计规则</a>
+            <a class="nav-link" href="/alert-results">告警处置报告审计结果</a>
+            <a class="nav-link" href="/alert-report-preview">告警处置报告审计预览</a>
             <a class="nav-link" href="/docs">API文档</a>
         </div>
     </div>
     <div class="toolbar">
-        <h1>PDF合同预览与定位</h1>
+        <h1>防护方案预览与定位</h1>
         <div class="file-input-wrapper">
             <input type="file" id="fileInput" accept=".pdf">
             <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">选择PDF文件</button>

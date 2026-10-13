@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>告警处置报告审计预览</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            z-index: 100;
+        }
+
+        .toolbar h1 { font-size: 18px; color: #333; margin-right: auto; }
+
+        .file-input-wrapper {
+            position: relative; overflow: hidden; display: inline-block;
+        }
+        .file-input-wrapper input[type=file] { position: absolute; left: -9999px; }
+
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 14px; transition: all 0.2s;
+        }
+        .btn-primary { background: #1976d2; color: white; }
+        .btn-primary:hover { background: #1565c0; }
+        .btn-success { background: #4caf50; color: white; }
+        .btn-success:hover { background: #43a047; }
+        .btn:disabled { background: #bdbdbd; cursor: not-allowed; }
+
+        .task-query-box { display: flex; align-items: center; gap: 8px; }
+        .task-query-box input {
+            padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;
+            font-size: 13px; width: 240px; outline: none;
+        }
+        .task-query-box input:focus { border-color: #1976d2; }
+
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+
+        .summary-panel {
+            width: 20%; flex: none; background: #fff;
+            border-right: 1px solid #e0e0e0;
+            display: flex; flex-direction: column;
+        }
+
+        .pdf-container {
+            flex: 1; min-width: 0;
+            overflow-y: auto; padding: 20px;
+            background: #e0e0e0;
+        }
+
+        .pdf-pages-wrapper {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 20px;
+        }
+
+        .pdf-page {
+            position: relative; background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 4px; overflow: hidden;
+            min-width: 0; width: fit-content; max-width: 100%;
+        }
+
+        .pdf-page img {
+            display: block; max-width: 100%; height: auto;
+            image-rendering: auto;
+        }
+
+        .page-number {
+            position: absolute; bottom: 8px; right: 12px;
+            background: rgba(0,0,0,0.6); color: white;
+            padding: 4px 8px; border-radius: 4px; font-size: 12px;
+        }
+
+        .highlights-layer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; overflow: hidden;
+        }
+
+        .highlight-box {
+            position: absolute; pointer-events: none;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .highlight-box.visible { opacity: 1; }
+
+        .highlight-box.problem-highlight {
+            border: 2px solid #ff9800;
+            background: rgba(255, 152, 0, 0.18);
+        }
+        .highlight-box.problem-highlight.active {
+            background: rgba(255, 152, 0, 0.4);
+            animation: problem-pulse 1s ease-in-out infinite;
+        }
+        @keyframes problem-pulse {
+            0%, 100% { border-color: #ff9800; box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.3); }
+            50% { border-color: #ffb74d; box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.25); }
+        }
+
+        .result-panel {
+            width: 30%; flex: none; background: #fff;
+            border-left: 1px solid #e0e0e0;
+            display: flex; flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            background: #fafafa;
+        }
+        .panel-header h3 { font-size: 16px; color: #333; margin-bottom: 8px; }
+        .task-status {
+            font-size: 12px; color: #666;
+            display: flex; align-items: center; gap: 6px;
+            word-break: break-all;
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #9e9e9e; flex-shrink: 0;
+        }
+        .status-dot.running { background: #1976d2; animation: blink 1s infinite; }
+        .status-dot.completed { background: #4caf50; }
+        .status-dot.failed { background: #f44336; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+
+        .stats {
+            display: flex; gap: 15px; padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 12px; color: #666;
+            flex-wrap: wrap;
+        }
+        .stat-item { display: flex; align-items: center; gap: 5px; }
+        .stat-value { font-weight: 500; color: #333; }
+
+        .panel-content { flex: 1; overflow-y: auto; padding: 15px; }
+
+        .audit-badge {
+            display: inline-block; padding: 6px 18px;
+            border-radius: 4px; font-size: 16px; font-weight: 600;
+            color: white; margin-bottom: 12px;
+        }
+        .audit-badge.reject { background: #e53935; }
+        .audit-badge.review { background: #fb8c00; }
+        .audit-badge.pass { background: #43a047; }
+        .audit-badge.default { background: #1e88e5; }
+
+        .summary-title {
+            font-size: 13px; font-weight: 600; color: #555;
+            margin: 10px 0 6px 0; display: flex; align-items: center; gap: 6px;
+        }
+        .summary-text {
+            font-size: 13px; color: #333; line-height: 1.6;
+            word-break: break-all; white-space: pre-wrap;
+        }
+
+        .problem-card {
+            padding: 12px; border: 1px solid #e0e0e0;
+            border-radius: 6px; margin-bottom: 10px;
+            transition: all 0.2s; cursor: pointer; background: #fff;
+        }
+        .problem-card:hover { border-color: #ff9800; background: #fff8f0; }
+        .problem-card.active {
+            border-color: #ff9800; background: #fff3e0;
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.25);
+        }
+
+        .problem-card-header {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 8px;
+        }
+        .problem-name { font-size: 13px; color: #666; font-weight: 600; }
+
+        .btn-locate {
+            padding: 4px 10px; font-size: 12px;
+            background: #ff9800; color: white;
+            border: none; border-radius: 4px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .btn-locate:hover { background: #f57c00; }
+        .btn-locate:disabled { background: #bdbdbd; cursor: not-allowed; }
+
+        .problem-detail {
+            font-size: 13px; color: #555; margin-bottom: 6px;
+            line-height: 1.5;
+        }
+        .problem-label {
+            color: #888; font-weight: 500;
+            background: #f5f5f5; padding: 1px 6px;
+            border-radius: 3px; margin-right: 4px; font-size: 12px;
+        }
+        .problem-text {
+            color: #e65100; word-break: break-all;
+        }
+        .problem-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+        .problem-page { font-size: 11px; color: #999; }
+
+        .empty-state {
+            text-align: center; padding: 40px 20px; color: #999;
+        }
+        .empty-state svg {
+            width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.5;
+        }
+
+        .loading {
+            display: flex; align-items: center;
+            justify-content: center; height: 100%; color: #666;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1976d2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px; flex-shrink: 0;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .toast {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: #333; color: white;
+            padding: 12px 24px; border-radius: 4px;
+            font-size: 14px; z-index: 1000;
+            opacity: 0; transition: opacity 0.3s;
+            max-width: 80vw; word-break: break-all;
+        }
+        .toast.show { opacity: 1; }
+
+        .navbar {
+            background: #1565c0;
+            border-bottom: 1px solid #0d47a1;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            z-index: 101;
+            flex-shrink: 0;
+        }
+        .navbar {
+            flex-wrap: wrap;
+        }
+        .navbar-brand {
+            font-size: 16px; font-weight: 600; color: #fff;
+            margin-right: 24px; padding: 12px 0; white-space: nowrap;
+            order: 1;
+        }
+        .nav-links {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+            flex-wrap: wrap;
+            order: 2;
+        }
+        /* 第二行：告警处置报告系列，整行换行并加分隔线 */
+        .nav-links:nth-of-type(2) {
+            width: 100%;
+            border-top: 1px solid rgba(255,255,255,0.15);
+            padding-left: 4px;
+        }
+        .nav-link {
+            padding: 12px 18px; border: none; border-radius: 0;
+            cursor: pointer; font-size: 14px; text-decoration: none; color: rgba(255,255,255,0.8);
+            background: transparent; transition: all 0.2s; display: inline-block;
+        }
+        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.12); }
+        .nav-link.active { color: #fff; background: rgba(255,255,255,0.2); font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="nav-links">
+            <a class="nav-link" href="/">防护方案审计预览</a>
+            <a class="nav-link" href="/contracts">防护方案报告</a>
+            <a class="nav-link" href="/rules">防护方案审计规则</a>
+            <a class="nav-link" href="/results">防护方案审计结果</a>
+        </div>
+        <div class="nav-links">
+            <a class="nav-link" href="/alert-reports">告警处置报告</a>
+            <a class="nav-link" href="/alert-rules">告警处置报告审计规则</a>
+            <a class="nav-link" href="/alert-results">告警处置报告审计结果</a>
+            <a class="nav-link active" href="/alert-report-preview">告警处置报告审计预览</a>
+            <a class="nav-link" href="/docs">API文档</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <h1>告警处置报告审计预览与定位</h1>
+        <div class="file-input-wrapper">
+            <input type="file" id="fileInput" accept=".pdf">
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">选择PDF上传审计</button>
+        </div>
+        <div class="task-query-box">
+            <input type="text" id="taskIdInput" placeholder="输入 task_id 查询已有任务">
+            <button class="btn btn-success" onclick="queryTask()">查询任务</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="summary-panel">
+            <div class="panel-header">
+                <h3>AI研判结论</h3>
+                <div class="task-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="taskStatusText">等待任务</span>
+                </div>
+            </div>
+            <div class="panel-content" id="summaryContent">
+                <div class="empty-state">
+                    <p>等待审计结果...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="pdf-container" id="pdfContainer">
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+                <p>请选择PDF文件上传，或输入 task_id 查询已有任务</p>
+            </div>
+        </div>
+
+        <div class="result-panel">
+            <div class="panel-header">
+                <h3>问题与定位</h3>
+            </div>
+            <div class="stats" id="resultStats" style="display:none;">
+                <div class="stat-item">
+                    问题: <span class="stat-value" id="problemCount">0</span> 个
+                </div>
+                <div class="stat-item">
+                    可定位: <span class="stat-value" id="locatableCount">0</span>
+                </div>
+                <div class="stat-item">
+                    无定位: <span class="stat-value" id="unlocatableCount">0</span>
+                </div>
+            </div>
+            <div class="panel-content" id="resultContent">
+                <div class="empty-state">
+                    <p>上传PDF后自动进行审计<br>点击问题卡片可在PDF中定位原文位置</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // 自动获取当前页面所在的服务器地址，支持跨服务器部署
+        const API_BASE_URL = window.location.origin;
+        const POLL_INTERVAL = 30000;      // 轮询间隔 2 秒
+        const MAX_POLL_COUNT = 30;      // 最多轮询 300 次（约 10 分钟）
+
+        const STATUS_TEXT = {
+            pending: '排队等待中...',
+            pdf_processing: 'PDF解析中...',
+            pdf_done: 'PDF解析完成',
+            audit_processing: '研判分析中...',
+            completed: '审计完成',
+            failed: '任务失败'
+        };
+
+        const AppState = {
+            currentTaskId: null,
+            pdfPages: [],
+            problemList: [],
+            highlights: [],
+            pollingTimer: null,
+            pollCount: 0
+        };
+
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), duration);
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = API_BASE_URL + endpoint;
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    const detail = data.detail;
+                    const msg = typeof detail === 'string' ? detail :
+                                Array.isArray(detail) ? detail.map(e => e.msg || JSON.stringify(e)).join('; ') :
+                                JSON.stringify(detail);
+                    throw new Error(msg || '请求失败');
+                }
+                return data;
+            } catch (error) {
+                console.error('API请求失败:', error);
+                showToast('请求失败: ' + error.message);
+                return { success: false, message: error.message };
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        function formatError(err) {
+            if (!err) return '未知错误';
+            if (typeof err === 'string') return err;
+            if (typeof err === 'object' && err.message) return err.message;
+            try { return JSON.stringify(err); } catch(e) { return String(err); }
+        }
+
+        function updateTaskStatusUI(task) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('taskStatusText');
+            const status = task ? task.status : '';
+            dot.className = 'status-dot';
+            if (status === 'completed') dot.classList.add('completed');
+            else if (status === 'failed') dot.classList.add('failed');
+            else if (status) dot.classList.add('running');
+            let msg = STATUS_TEXT[status] || status || '等待任务';
+            if (task && task.file_name) msg += '（' + task.file_name + '）';
+            text.textContent = msg;
+        }
+
+        function clearHighlights() {
+            AppState.highlights.forEach(h => h.remove());
+            AppState.highlights = [];
+        }
+
+        function stopPolling() {
+            if (AppState.pollingTimer) {
+                clearInterval(AppState.pollingTimer);
+                AppState.pollingTimer = null;
+            }
+            AppState.pollCount = 0;
+        }
+
+        // ==================== 文件上传 ====================
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showToast('请选择PDF文件');
+                return;
+            }
+            e.target.value = '';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            showToast('正在上传文件...');
+
+            try {
+                const response = await fetch(API_BASE_URL + '/api/alert-report-tasks/upload', {
+                    method: 'POST', body: formData
+                });
+                const result = await response.json();
+                if (result.success) {
+                    const data = result.data;
+                    AppState.currentTaskId = data.task_id;
+                    resetResultPanel();
+                    updateTaskStatusUI({ status: data.status, file_name: file.name });
+                    showToast('上传成功，任务已提交: ' + data.task_id);
+
+                    // 加载PDF预览（新任务返回file_path；去重任务由查询接口获取）
+                    if (data.file_path) {
+                        await loadPdfPages(data.file_path);
+                    } else {
+                        await loadTaskPdfPath(data.task_id);
+                    }
+                    startPolling();
+                } else {
+                    showToast('上传失败: ' + formatError(result.message));
+                }
+            } catch (error) {
+                showToast('上传出错: ' + formatError(error));
+            }
+        });
+
+        // ==================== task_id 查询已有任务 ====================
+
+        async function queryTask() {
+            const taskId = document.getElementById('taskIdInput').value.trim();
+            if (!taskId) { showToast('请输入task_id'); return; }
+            stopPolling();
+            resetResultPanel();
+            AppState.currentTaskId = taskId;
+            const result = await apiRequest('/api/alert-report-tasks/' + encodeURIComponent(taskId));
+            if (!result.success) {
+                updateTaskStatusUI({ status: 'failed', file_name: '' });
+                showToast('查询失败: ' + formatError(result.message));
+                return;
+            }
+            const task = result.data;
+            updateTaskStatusUI(task);
+            if (task.file_path) {
+                await loadPdfPages(task.file_path);
+            }
+            if (task.status === 'completed') {
+                renderResult(task);
+                showToast('任务已完成，结果已加载');
+            } else if (task.status === 'failed') {
+                renderFailed(task);
+            } else {
+                startPolling();
+                showToast('任务进行中: ' + (STATUS_TEXT[task.status] || task.status));
+            }
+        }
+
+        // 上传去重场景：查询任务获取物理文件路径
+        async function loadTaskPdfPath(taskId) {
+            const result = await apiRequest('/api/alert-report-tasks/' + encodeURIComponent(taskId));
+            if (result.success && result.data && result.data.file_path) {
+                await loadPdfPages(result.data.file_path);
+            }
+        }
+
+        // ==================== PDF 加载 ====================
+
+        async function loadPdfPages(filepath) {
+            if (!filepath) {
+                document.getElementById('pdfContainer').innerHTML =
+                    '<div class="empty-state"><p>加载失败: 文件路径为空</p></div>';
+                showToast('文件路径为空，无法加载PDF');
+                return;
+            }
+            const container = document.getElementById('pdfContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>正在加载PDF页面...</div>';
+            clearHighlights();
+
+            const result = await apiRequest('/api/pdf_pages', {
+                method: 'POST',
+                body: JSON.stringify({ "filepath": filepath })
+            });
+
+            if (result.success) {
+                AppState.pdfPages = result.pages;
+                let html = '<div class="pdf-pages-wrapper">';
+                for (const page of result.pages) {
+                    html += '<div class="pdf-page" id="page-' + page.page_num + '">' +
+                        '<img src="data:image/png;base64,' + page.img_base64 + '"' +
+                        ' alt="第 ' + (page.page_num + 1) + ' 页"' +
+                        ' data-width="' + page.width + '"' +
+                        ' data-height="' + page.height + '"' +
+                        ' data-ocr-width="' + page.ocr_width + '"' +
+                        ' data-ocr-height="' + page.ocr_height + '">' +
+                        '<div class="page-number">第 ' + (page.page_num + 1) + ' 页 / 共 ' + result.pages.length + ' 页</div>' +
+                        '<div class="highlights-layer" id="highlights-' + page.page_num + '"></div></div>';
+                }
+                html += '</div>';
+                container.innerHTML = html;
+                showToast('PDF加载完成，共 ' + result.total_pages + ' 页');
+            } else {
+                container.innerHTML = '<div class="empty-state"><p>加载失败: ' + formatError(result.error) + '</p></div>';
+            }
+        }
+
+        function scrollPdfToElement(element) {
+            const container = document.getElementById('pdfContainer');
+            const cr = container.getBoundingClientRect();
+            const er = element.getBoundingClientRect();
+            const relativeTop = er.top - cr.top + container.scrollTop;
+            const target = relativeTop - (container.clientHeight - er.height) / 2;
+            container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        }
+
+        // ==================== 任务轮询 ====================
+
+        function startPolling() {
+            stopPolling();
+            if (!AppState.currentTaskId) return;
+            AppState.pollingTimer = setInterval(async () => {
+                AppState.pollCount++;
+                if (AppState.pollCount > MAX_POLL_COUNT) {
+                    stopPolling();
+                    showToast('任务执行超时，请稍后通过task_id查询');
+                    return;
+                }
+                const result = await apiRequest('/api/alert-report-tasks/' + encodeURIComponent(AppState.currentTaskId));
+                if (!result.success) return;
+                const task = result.data;
+                updateTaskStatusUI(task);
+                if (task.status === 'completed') {
+                    stopPolling();
+                    // 若PDF尚未加载（上传去重场景兜底），先加载
+                    if (AppState.pdfPages.length === 0 && task.file_path) {
+                        await loadPdfPages(task.file_path);
+                    }
+                    renderResult(task);
+                    showToast('审计完成，共 ' + (AppState.problemList.length) + ' 个问题');
+                } else if (task.status === 'failed') {
+                    stopPolling();
+                    renderFailed(task);
+                }
+            }, POLL_INTERVAL);
+        }
+
+        // ==================== 结果渲染 ====================
+
+        function resetResultPanel() {
+            stopPolling();
+            AppState.problemList = [];
+            clearHighlights();
+            document.getElementById('resultStats').style.display = 'none';
+            document.getElementById('summaryContent').innerHTML =
+                '<div class="empty-state"><p>任务已提交，等待审计结果...</p></div>';
+            document.getElementById('resultContent').innerHTML =
+                '<div class="empty-state"><p>等待审计结果...</p></div>';
+        }
+
+        function renderResult(task) {
+            const resultJson = task.result_json || {};
+            AppState.problemList = resultJson.problem_list || [];
+
+            // 统计
+            const locatable = AppState.problemList.filter(p => (p.field_positions || []).length > 0).length;
+            document.getElementById('problemCount').textContent = AppState.problemList.length;
+            document.getElementById('locatableCount').textContent = locatable;
+            document.getElementById('unlocatableCount').textContent = AppState.problemList.length - locatable;
+            document.getElementById('resultStats').style.display = AppState.problemList.length > 0 ? 'flex' : 'none';
+
+            // ==================== 第一列：AI研判结论 ====================
+            const auditResult = resultJson.audit_result || '';
+            const badgeClass = auditResult.indexOf('驳回') >= 0 ? 'reject'
+                : auditResult.indexOf('复核') >= 0 ? 'review'
+                : (auditResult.indexOf('通过') >= 0 || auditResult.indexOf('合格') >= 0) ? 'pass' : 'default';
+            let summaryHtml = '<span class="audit-badge ' + badgeClass + '">' + escapeHtml(auditResult || '无结果') + '</span>';
+            if (resultJson.audit_details) {
+                summaryHtml += '<div class="summary-title">研判详情</div>' +
+                    '<div class="summary-text">' + escapeHtml(resultJson.audit_details) + '</div>';
+            }
+            if (resultJson.conclusion) {
+                summaryHtml += '<div class="summary-title" style="margin-top:10px;">审核结论</div>' +
+                    '<div class="summary-text">' + escapeHtml(resultJson.conclusion) + '</div>';
+            }
+            document.getElementById('summaryContent').innerHTML = summaryHtml;
+
+            // ==================== 第三列：问题列表 ====================
+            let html = '';
+            AppState.problemList.forEach((problem, index) => {
+                const positions = problem.field_positions || [];
+                const posCount = positions.length;
+                const pageSet = [...new Set(positions.map(p => p.page_num + 1))];
+                const pageText = pageSet.length > 0 ? '第 ' + pageSet.join('、') + ' 页' : '未定位到原文';
+
+                html += '<div class="problem-card" data-problem-index="' + index + '"' +
+                    ' onclick="locateProblem(' + index + ')">' +
+                    '<div class="problem-card-header">' +
+                    '<span class="problem-name">问题 ' + (index + 1) + '</span>' +
+                    '<button class="btn-locate"' + (posCount > 0 ? '' : ' style="background:#bdbdbd;"') +
+                    ' onclick="event.stopPropagation(); locateProblem(' + index + ')">' +
+                    (posCount > 0 ? '定位(' + posCount + ')' : '无位置') + '</button></div>' +
+                    '<div class="problem-detail"><span class="problem-label">原文</span>' +
+                    '<span class="problem-text">' + escapeHtml(problem.text || '') + '</span></div>' +
+                    '<div class="problem-detail"><span class="problem-label">原因</span>' +
+                    escapeHtml(problem.cause || '') + '</div>' +
+                    '<div class="problem-detail"><span class="problem-label">建议</span>' +
+                    escapeHtml(problem.suggest || '') + '</div>' +
+                    '<div class="problem-meta"><span class="problem-page">' + pageText + '</span></div></div>';
+            });
+
+            if (AppState.problemList.length === 0) {
+                html += '<div class="empty-state"><p>未发现问题项</p></div>';
+            }
+
+            document.getElementById('resultContent').innerHTML = html;
+
+            // 渲染所有问题的高亮框
+            renderHighlights();
+        }
+
+        function renderFailed(task) {
+            document.getElementById('resultStats').style.display = 'none';
+            document.getElementById('summaryContent').innerHTML =
+                '<span class="audit-badge reject">任务失败</span>' +
+                '<div class="summary-title">错误信息</div>' +
+                '<div class="summary-text">' + escapeHtml(task.error_message || '未知错误') + '</div>';
+            document.getElementById('resultContent').innerHTML =
+                '<div class="empty-state"><p>任务失败，无审计结果</p></div>';
+            showToast('任务执行失败');
+        }
+
+        // ==================== 定位高亮 ====================
+
+        function renderHighlights() {
+            document.querySelectorAll('.highlight-box.problem-highlight').forEach(h => h.remove());
+            AppState.highlights = [];
+
+            // 已加载的页码集合
+            const loadedPageNums = new Set();
+            document.querySelectorAll('.pdf-page').forEach(function(el) {
+                const id = el.id;
+                if (id && id.startsWith('page-')) {
+                    loadedPageNums.add(parseInt(id.replace('page-', '')));
+                }
+            });
+
+            AppState.problemList.forEach((problem, index) => {
+                (problem.field_positions || []).forEach(pos => {
+                    let pageNum = pos.page_num;
+                    if (!loadedPageNums.has(pageNum)) {
+                        console.warn('[定位] 页码 ' + pageNum + ' 未加载，问题: ' + (problem.text || '').substring(0, 20));
+                        if (loadedPageNums.size > 0) pageNum = Math.min(...loadedPageNums);
+                        else return;
+                    }
+                    const layer = document.getElementById('highlights-' + pageNum);
+                    const pageEl = document.getElementById('page-' + pageNum);
+                    if (!layer || !pageEl) return;
+
+                    const img = pageEl.querySelector('img');
+                    if (!img) return;
+                    const imgW = parseInt(img.dataset.width);
+                    const imgH = parseInt(img.dataset.height);
+                    const ocrW = parseFloat(img.dataset.ocrWidth);
+                    const ocrH = parseFloat(img.dataset.ocrHeight);
+
+                    const hl = createProblemHighlightBox(pos, imgW, imgH, ocrW, ocrH, index);
+                    if (hl) {
+                        layer.appendChild(hl);
+                        AppState.highlights.push(hl);
+                    }
+                });
+            });
+
+            // 高亮框默认隐藏，点击"定位"时仅显示当前问题的命中框
+        }
+
+        function createProblemHighlightBox(pos, imgW, imgH, ocrW, ocrH, problemIndex) {
+            const bbox = pos.block_bbox;
+            if (!bbox || bbox.length < 4) return null;
+
+            // bbox 为PDF点坐标，与 ocr_width/ocr_height（页面点数）同坐标系
+            const sx = imgW / ocrW;
+            const sy = imgH / ocrH;
+            const x = bbox[0] * sx, y = bbox[1] * sy;
+            const w = (bbox[2] - bbox[0]) * sx, h = (bbox[3] - bbox[1]) * sy;
+
+            const div = document.createElement('div');
+            div.className = 'highlight-box problem-highlight';
+            div.dataset.problemIndex = problemIndex;
+            div.style.left = (x / imgW * 100) + '%';
+            div.style.top = (y / imgH * 100) + '%';
+            div.style.width = (w / imgW * 100) + '%';
+            div.style.height = (h / imgH * 100) + '%';
+            div.title = '问题 ' + (problemIndex + 1) + ': ' + (pos.block_content || '');
+            return div;
+        }
+
+        function locateProblem(index) {
+            const problem = AppState.problemList[index];
+            if (!problem) return;
+
+            // 右侧卡片激活
+            document.querySelectorAll('.problem-card').forEach(c => c.classList.remove('active'));
+            const card = document.querySelector('.problem-card[data-problem-index="' + index + '"]');
+            if (card) {
+                card.classList.add('active');
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            // 无论是否有定位，先清除所有黄框（避免保留上次信息）
+            document.querySelectorAll('.highlight-box.problem-highlight').forEach(h => h.classList.remove('visible', 'active'));
+
+            const positions = problem.field_positions || [];
+            if (positions.length === 0) {
+                showToast('该问题未匹配到原文位置，已清除定位框');
+                return;
+            }
+
+            // 仅显示当前问题的命中框
+            const boxes = document.querySelectorAll('.highlight-box.problem-highlight[data-problem-index="' + index + '"]');
+            boxes.forEach(b => b.classList.add('visible', 'active'));
+
+            // 滚动到第一个高亮所在页面
+            if (boxes.length > 0) {
+                const pageEl = boxes[0].closest('.pdf-page');
+                if (pageEl) scrollPdfToElement(pageEl);
+                else scrollPdfToElement(boxes[0]);
+                showToast('已定位: 问题 ' + (index + 1) + '，共 ' + boxes.length + ' 处');
+            }
+        }
+
+        // ==================== URL参数自动查询 ====================
+        // 支持 /alert-report-preview?task_id=xxx 直接打开指定任务（由审计任务结果页跳转）
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = new URLSearchParams(window.location.search);
+            const taskId = params.get('task_id');
+            if (taskId) {
+                document.getElementById('taskIdInput').value = taskId;
+                queryTask();
+            }
+        });
+    </script>
+</body>
+</html>

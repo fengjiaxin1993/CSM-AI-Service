@@ -1,20 +1,28 @@
 from __future__ import annotations
 from fastapi import APIRouter, Body
-from fastapi.responses import FileResponse
+from starlette.responses import FileResponse
 
-from csm_ai_service.utils import build_logger
 from csm_ai_service.server.csm_analyze.warning_analysis.gen_notice import generate_doc_from_data
-from csm_ai_service.server.csm_analyze.warning_analysis.report_analyze import warning_analyze, save_warning_report, \
-    delete_warning_report, get_alarm_report_info
+from csm_ai_service.server.warning_report_audit.audit.audit_process import get_alarm_report_info, \
+    warning_analyze_process
+from csm_ai_service.utils import build_logger
 
 logger = build_logger()
 
-warning_router = APIRouter(prefix="/warning", tags=["告警处置报告研判"])
+warning_router = APIRouter(prefix="/warning", tags=["告警处置报告研判【同步方法】"])
 
 warning_router.post(
     "/analyze",
-    summary="对告警处置报告进行研判",
-)(warning_analyze)
+    summary="对告警处置报告研判-同步",
+)(warning_analyze_process)
+
+
+warning_router.post(
+    "/get_alarm_report_info",
+    summary="获取告警处置报告信息-同步",
+)(get_alarm_report_info)
+
+
 
 
 @warning_router.post(
@@ -48,20 +56,3 @@ def generate_rectification_notice_doc(
         )
 ):
     return generate_doc_from_data(data)
-
-
-warning_router.post(
-    "/save_warning_report",
-    summary="保存告警处置报告",
-)(save_warning_report)
-
-warning_router.post(
-    "/get_alarm_report_info",
-    summary="获取告警处置报告信息",
-)(get_alarm_report_info)
-
-
-warning_router.post(
-    "/delete_warning_report",
-    summary="删除告警处置报告",
-)(delete_warning_report)

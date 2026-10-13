@@ -1,8 +1,7 @@
 """
 历史告警处置报告知识库模型
 """
-from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean
-
+from sqlalchemy import Column, String, Text, DateTime, Integer
 from csm_ai_service.server.db.base import Base
 from csm_ai_service.server.db.models.base import get_shanghai_time
 
@@ -11,16 +10,17 @@ class AlertReportModel(Base):
     """
     历史告警处置报告 - 存储告警处置全流程信息
     status: "cache" 缓存状态（首次插入），"saved" 已保存状态（明确确认保存）
+    同名不同内容：file_name 不唯一，通过 content_hash（SHA-256）判定是否为同一篇内容
     """
     __tablename__ = "alert_report"
 
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="报告唯一ID")
+    file_id = Column(String(64), primary_key=True, index=True, default="", comment="报告唯一ID")
     report_title = Column(String(255), default="", comment="报告标题")
     alert_content = Column(Text, default="", comment="告警内容")
     meta_info = Column(Text, default="", comment="告警元信息")
-    file_name = Column(String(255), default="", unique=True, comment="报告文件名称（唯一键）")
-    full_text = Column(Text, default="", comment="文档段落文本（不含表格）")
-    table_data_text = Column(Text, default="", comment="文档表格数据文本")
+    file_name = Column(String(255), default="", index=True, comment="报告文件名称（普通索引，允许同名）")
+    content_hash = Column(String(64), default="", index=True, comment="内容SHA-256哈希（内容去重键）")
+    markdown = Column(Text, default="", comment="文档markdown")
     status = Column(String(20), default="cache", nullable=False, comment="状态：cache=缓存, saved=已保存")
 
     # 全文检索索引字段：对告警内容做jieba分词后的结果
@@ -30,7 +30,7 @@ class AlertReportModel(Base):
     update_time = Column(DateTime, default=get_shanghai_time(), onupdate=get_shanghai_time(), comment="更新时间")
 
     def __repr__(self):
-        return f"<AlertReport(id={self.id}, report_title='{self.report_title}', status='{self.status}')>"
+        return f"<AlertReport(file_id={self.file_id}, report_title='{self.report_title}', status='{self.status}')>"
 
 
 class AlertRuleModel(Base):

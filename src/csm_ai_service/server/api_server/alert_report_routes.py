@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from csm_ai_service.server.utils import ApiResponse, AlertReport, AlertRule
 from csm_ai_service.server.db.repository.alert_repository import (
-    add_alert_report, get_alert_report_by_id, list_alert_reports,
+    add_alert_report, get_alert_report_by_file_id, list_alert_reports,
     update_alert_report, delete_alert_report, search_alert_reports,
     confirm_alert_report,
     add_alert_rule, get_alert_rule_by_id, list_alert_rules,
@@ -19,7 +19,7 @@ from csm_ai_service.server.db.repository.alert_repository import (
     export_alert_reports_to_excel, import_alert_reports_from_excel,
     export_alert_rules_to_excel, import_alert_rules_from_excel,
 )
-from csm_ai_service.server.csm_analyze.warning_analysis.report_analyze import save_warning_report_only_by_file, save_warning_report
+from csm_ai_service.server.warning_report_audit.audit.audit_process import save_warning_report
 
 # ==================== 告警报告路由 ====================
 
@@ -28,35 +28,28 @@ alert_report_router = APIRouter(prefix="/api/alert-reports", tags=["告警处置
 
 @alert_report_router.post("/create", response_model=ApiResponse)
 async def create_alert_report(report: AlertReport):
-    """创建告警处置报告（默认status=cache缓存状态）"""
+    """创建告警处置报告（默认status=cache缓存状态）。
+    去重键为确定性file_id（file_name + content_hash 的SHA-256）：同名同内容去重返回已有记录，同名不同内容新增。"""
     try:
-        report_id = add_alert_report(
+        file_id = add_alert_report(
             report_title=report.report_title,
             file_name=report.file_name,
             alert_content=report.alert_content,
             meta_info=report.meta_info,
-            full_text=report.full_text,
-            table_data_text=report.table_data_text,
+            markdown=report.markdown,
             status=report.status or "cache",
+            content_hash=report.content_hash or "",
         )
-        return ApiResponse(success=True, message="创建成功", data={"id": report_id})
+        return ApiResponse(success=True, message="创建成功", data={"file_id": file_id})
     except ValueError as e:
         return ApiResponse(success=False, message=str(e))
     except Exception as e:
         return ApiResponse(success=False, message=f"创建失败: {str(e)}")
 
 
-
-alert_report_router.post(
-    "/upload",
-    summary="保存告警处置报告",
-)(save_warning_report_only_by_file)
-
-
 @alert_report_router.post("/batch-upload", response_model=ApiResponse)
 async def batch_upload_alert_reports(files: List[UploadFile] = File(..., description="批量上传文件")):
     """批量上传告警处置报告，逐个调用单文件上传逻辑，返回汇总结果"""
-    from csm_ai_service.server.utils import BaseResponse
 
     success_count = 0
     fail_count = 0
@@ -104,11 +97,12 @@ async def get_alert_reports(
         return ApiResponse(success=False, message=f"获取失败: {str(e)}")
 
 
-@alert_report_router.get("/detail/{report_id}", response_model=ApiResponse)
-async def get_alert_report_detail(report_id: int):
+
+@alert_report_router.get("/detail/{file_id}", response_model=ApiResponse)
+async def get_alert_report_detail(file_id: str):
     """获取告警报告详情"""
     try:
-        data = get_alert_report_by_id(report_id)
+        data = get_alert_report_by_file_id(file_id)
         if not data:
             return ApiResponse(success=False, message="报告不存在")
         return ApiResponse(success=True, message="获取成功", data=data)
@@ -116,19 +110,19 @@ async def get_alert_report_detail(report_id: int):
         return ApiResponse(success=False, message=f"获取失败: {str(e)}")
 
 
-@alert_report_router.post("/update/{report_id}", response_model=ApiResponse)
-async def modify_alert_report(report_id: int, report: AlertReport):
+@alert_report_router.post("/update/{file_id}", response_model=ApiResponse)
+async def modify_alert_report(file_id: str, report: AlertReport):
     """更新告警报告"""
     try:
         success = update_alert_report(
-            report_id=report_id,
+            file_id=file_id,
             report_title=report.report_title,
             file_name=report.file_name,
             alert_content=report.alert_content,
             meta_info=report.meta_info,
-            full_text=report.full_text,
-            table_data_text=report.table_data_text,
+            markdown=report.markdown,
             status=report.status,
+            content_hash=report.content_hash,
         )
         if success:
             return ApiResponse(success=True, message="更新成功")
@@ -137,11 +131,11 @@ async def modify_alert_report(report_id: int, report: AlertReport):
         return ApiResponse(success=False, message=f"更新失败: {str(e)}")
 
 
-@alert_report_router.post("/confirm/{report_id}", response_model=ApiResponse)
-async def confirm_alert_report_api(report_id: int):
+@alert_report_router.post("/confirm/{file_id}", response_model=ApiResponse)
+async def confirm_alert_report_api(file_id: str):
     """确认保存告警报告（将status从cache改为saved）"""
     try:
-        success = confirm_alert_report(report_id=report_id)
+        success = confirm_alert_report(file_id=file_id)
         if success:
             return ApiResponse(success=True, message="确认保存成功")
         return ApiResponse(success=False, message="报告不存在或确认失败")
@@ -149,11 +143,11 @@ async def confirm_alert_report_api(report_id: int):
         return ApiResponse(success=False, message=f"确认失败: {str(e)}")
 
 
-@alert_report_router.post("/delete/{report_id}", response_model=ApiResponse)
-async def remove_alert_report(report_id: int):
+@alert_report_router.post("/delete/{file_id}", response_model=ApiResponse)
+async def remove_alert_report(file_id: str):
     """删除告警报告"""
     try:
-        success = delete_alert_report(report_id)
+        success = delete_alert_report(file_id)
         if success:
             return ApiResponse(success=True, message="删除成功")
         return ApiResponse(success=False, message="报告不存在或删除失败")

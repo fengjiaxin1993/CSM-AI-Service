@@ -6,6 +6,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from csm_ai_service.server.protection_audit.task_queue import stop_task_workers, start_task_workers
+from csm_ai_service.server.warning_report_audit.alert_report_task_queue import (
+    stop_alert_report_task_workers, start_alert_report_task_workers,
+)
 from csm_ai_service.server.api_server.audit_result_routes import audit_result_router
 from csm_ai_service.server.api_server.audit_rule_routes import audit_rule_router
 from csm_ai_service.server.api_server.contract_routes import contract_router
@@ -22,7 +25,8 @@ from csm_ai_service.server.api_server.kb_routes import kb_router
 from csm_ai_service.server.utils import MakeFastAPIOffline
 from csm_ai_service.server.api_server.pdf_extract_routes import pdf_extract_router
 from csm_ai_service.server.api_server.chat_manager_routes import chat_manager_router
-from csm_ai_service.server.api_server.alert_routes import alert_report_router, alert_rule_router
+from csm_ai_service.server.api_server.alert_report_routes import alert_report_router, alert_rule_router
+from csm_ai_service.server.api_server.alert_report_task_routes import alert_report_task_router
 from csm_ai_service.utils import build_logger
 logger = build_logger()
 
@@ -53,12 +57,14 @@ def create_app():
         """服务关闭时停止 TaskWorker 线程"""
         logger.info("服务正在关闭...")
         stop_task_workers()
+        stop_alert_report_task_workers()
         logger.info("服务关闭完成")
 
     @app.on_event("startup")
     def on_startup():
         """服务启动时执行初始化"""
         start_task_workers()
+        start_alert_report_task_workers()
 
     @app.get("/index",summary="文档展示页面", include_in_schema=False)
     async def root():
@@ -120,6 +126,27 @@ def create_app():
             return FileResponse(rules_path)
         return {"message": "告警处置规则页面不存在", "docs": "/alert-rules"}
 
+    @app.get("/alert-report-preview",summary="告警处置报告审计预览", include_in_schema=False)
+    async def alert_report_preview_page():
+        """告警处置报告审计预览页面（PDF预览 + 研判结果定位）"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
+        preview_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "alert_report_preview.html")
+        if os.path.exists(preview_path):
+            return FileResponse(preview_path)
+        return {"message": "告警报告审计预览页面不存在", "docs": "/docs"}
+
+    @app.get("/alert-results",summary="告警处置报告审计任务结果", include_in_schema=False)
+    async def alert_results_page():
+        """告警处置报告审计任务列表与结果查看页面"""
+        if not Settings.basic_settings.SHOW_PAGES:
+            return JSONResponse({"detail": "前端页面已禁用"}, status_code=403)
+        results_path = os.path.join(Settings.basic_settings.DATA_PATH, "frontend", "alert_results.html")
+        if os.path.exists(results_path):
+            return FileResponse(results_path)
+        return {"message": "告警处置审计结果页面不存在", "docs": "/docs"}
+
+
     @app.get("/docs", summary="swagger 文档", include_in_schema=False)
     async def document():
         if not Settings.basic_settings.SHOW_PAGES:
@@ -147,6 +174,7 @@ def create_app():
     app.include_router(platform_warning_router)
     app.include_router(alert_report_router)
     app.include_router(alert_rule_router)
+    app.include_router(alert_report_task_router)
 
 
     return app

@@ -78,33 +78,7 @@ def html_to_table(html):
     return rows
 
 
-def init_report_json_data() -> Dict:
-    """初始化报告结构化字段（中文键）"""
-    return {
-        "报告标题": "",
-        "告警信息": "",
-        "设备名称": "",
-        "设备类型": "",
-        "告警时间": "",
-        "告警内容": "",
-        "处置过程": "",
-        "原因分析": "",
-        "责任人员和责任单位处理": "",
-        "人员教育培训": "",
-        "整改情况": "",
-        "佐证材料": "",
-    }
 
-
-def init_analyze_result_json_data() -> Dict:
-    """初始化研判结论结构化字段（中文键）"""
-    return {
-        "audit_result": "需人工复核",
-        "audit_details": "",
-        "summary": "",
-        "reject_reason": "",
-        "power_suggestion": "",
-    }
 
 
 def output_standard_dict(template: dict, output_dict: dict) -> dict:

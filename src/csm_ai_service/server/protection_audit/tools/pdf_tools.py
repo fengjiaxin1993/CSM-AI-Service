@@ -1,4 +1,4 @@
-# pdf_tools.py
+# pdf_show_tools.py
 # PDF页面图片API - 用于前端精确定位与框
 
 import os
