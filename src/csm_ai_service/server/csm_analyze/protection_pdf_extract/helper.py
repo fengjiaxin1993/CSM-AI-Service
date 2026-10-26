@@ -44,7 +44,7 @@ def is_same_list(a_list, b_list):
 
 
 # 将表格中关联资产进行分开
-def split_line(header_list, data_list, split_char_list: list = list['、', '，'], key='关联资产'):
+def split_line(header_list, data_list, split_char_list: list = ['、', '，'], key='关联资产'):
     column_num = len(header_list)
     column_idx = -1
     for idx in range(column_num):
@@ -64,7 +64,7 @@ def split_line(header_list, data_list, split_char_list: list = list['、', '，'
     return split_data_list
 
 
-def cut_list(line, split_char_list: list = list['、', '，']) -> list[str]:
+def cut_list(line, split_char_list: list = ['、', '，']) -> list[str]:
     for char in split_char_list:
         lines = line.split(char)
         if len(lines) > 1:

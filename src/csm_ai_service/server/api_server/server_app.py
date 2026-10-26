@@ -27,6 +27,7 @@ from csm_ai_service.server.api_server.pdf_extract_routes import pdf_extract_rout
 from csm_ai_service.server.api_server.chat_manager_routes import chat_manager_router
 from csm_ai_service.server.api_server.alert_report_routes import alert_report_router, alert_rule_router
 from csm_ai_service.server.api_server.alert_report_task_routes import alert_report_task_router
+from csm_ai_service.server.api_server.assessment_routes import monitoring_assessment_router
 from csm_ai_service.utils import build_logger
 logger = build_logger()
 
@@ -175,6 +176,7 @@ def create_app():
     app.include_router(alert_report_router)
     app.include_router(alert_rule_router)
     app.include_router(alert_report_task_router)
+    app.include_router(monitoring_assessment_router)
 
 
     return app
