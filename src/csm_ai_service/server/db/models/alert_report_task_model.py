@@ -19,7 +19,8 @@ class AlertReportTaskModel(Base):
     # 文件信息
     file_id = Column(String(64), nullable=False, comment="告警处置报告文件ID")
     file_name = Column(String(255), nullable=False, comment="告警处置报告文件名")
-    content_hash = Column(String(64), default="", index=True, comment="内容SHA-256哈希（内容去重键）")
+    file_path = Column(String(512), default="", comment="报告文件存储路径")
+    content_hash = Column(String(64), default="", index=True, comment="内容SHA-256哈希")
 
     # 任务状态: pending / pdf_processing / pdf_done / audit_processing / completed / failed
     status = Column(String(30), default="pending", comment="任务状态")

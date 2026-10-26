@@ -20,8 +20,32 @@ from csm_ai_service.utils import build_logger
 logger = build_logger()
 
 
+def _add_missing_columns():
+    """轻量迁移：为已存在的表补充模型中新增的列（create_all 不会给旧表加字段）"""
+    from sqlalchemy import inspect, text
+    from sqlalchemy.schema import CreateColumn
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            db_columns = {col["name"] for col in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in db_columns:
+                    continue
+                column_ddl = str(CreateColumn(column).compile(dialect=engine.dialect)).strip()
+                try:
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {column_ddl}'))
+                    logger.info(f"表 {table.name} 补充字段：{column.name}")
+                except Exception as e:
+                    logger.warning(f"表 {table.name} 补充字段 {column.name} 失败: {e}")
+
+
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    _add_missing_columns()
 
 
 def reset_tables():

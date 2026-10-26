@@ -26,27 +26,6 @@ from csm_ai_service.server.warning_report_audit.audit.audit_process import save_
 alert_report_router = APIRouter(prefix="/api/alert-reports", tags=["告警处置报告"])
 
 
-@alert_report_router.post("/create", response_model=ApiResponse)
-async def create_alert_report(report: AlertReport):
-    """创建告警处置报告（默认status=cache缓存状态）。
-    去重键为确定性file_id（file_name + content_hash 的SHA-256）：同名同内容去重返回已有记录，同名不同内容新增。"""
-    try:
-        file_id = add_alert_report(
-            report_title=report.report_title,
-            file_name=report.file_name,
-            alert_content=report.alert_content,
-            meta_info=report.meta_info,
-            markdown=report.markdown,
-            status=report.status or "cache",
-            content_hash=report.content_hash or "",
-        )
-        return ApiResponse(success=True, message="创建成功", data={"file_id": file_id})
-    except ValueError as e:
-        return ApiResponse(success=False, message=str(e))
-    except Exception as e:
-        return ApiResponse(success=False, message=f"创建失败: {str(e)}")
-
-
 @alert_report_router.post("/batch-upload", response_model=ApiResponse)
 async def batch_upload_alert_reports(files: List[UploadFile] = File(..., description="批量上传文件")):
     """批量上传告警处置报告，逐个调用单文件上传逻辑，返回汇总结果"""
@@ -123,6 +102,8 @@ async def modify_alert_report(file_id: str, report: AlertReport):
             markdown=report.markdown,
             status=report.status,
             content_hash=report.content_hash,
+            file_path=report.file_path,
+            extracted=report.extracted,
         )
         if success:
             return ApiResponse(success=True, message="更新成功")

@@ -13,9 +13,11 @@ from csm_ai_service.server.db.repository.search_index import build_index_text, t
 import hashlib
 
 
-def gen_file_id(file_name: str, content_hash: str) -> str:
-    raw = f"{file_name}\0{content_hash}"  # 使用不可见空字符做分隔，不会和业务内容冲突
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+def gen_file_id(file_name: str) -> str:
+    """生成报告唯一ID：以文件名为唯一主键（同名即同一篇报告，内容变化时直接覆盖）"""
+    raw = file_name or ""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
 
 # ==================== 告警报告 CRUD ====================
 
@@ -29,17 +31,38 @@ def add_alert_report(
     markdown: str = "",
     status: str = "cache",
     content_hash: str = "",
-    file_id: str = ""
+    file_id: str = "",
+    file_path: str = "",
+    extracted: bool = False,
 ) -> str:
     """新增告警处置报告，对告警内容自动构建全文索引，返回file_id。默认status=cache（缓存状态）。
 
-    去重键file_id（确定性ID）：未显式传入时按 (file_name, content_hash) 自动生成，
-    同名同内容 -> 相同file_id -> 去重返回已有记录；同名不同内容 -> 不同file_id -> 新记录。
+    以文件名（file_name）为唯一主键：
+    - 同名且 content_hash 相同 -> 直接复用已有记录，不覆盖
+    - 同名但 content_hash 不同（或原记录内容为空）-> 直接覆盖已有记录
     """
     if not file_id:
-        file_id = gen_file_id(file_name, content_hash)
+        file_id = gen_file_id(file_name)
     existing = session.query(AlertReportModel).filter_by(file_id=file_id).first()
     if existing:
+        # 同名同内容：直接采用已有记录
+        if content_hash and existing.content_hash == content_hash:
+            return existing.file_id
+        # 同名不同内容：覆盖（保留已有的file_path/status，其余用新数据覆盖）
+        existing.report_title = report_title
+        existing.file_name = file_name
+        existing.alert_content = alert_content
+        existing.meta_info = json.dumps(meta_info, ensure_ascii=False) if meta_info else ""
+        existing.markdown = markdown
+        existing.keywords_index = build_index_text(alert_content)
+        existing.content_hash = content_hash or ""
+        existing.extracted = extracted
+        if file_path:
+            existing.file_path = file_path
+        if status:
+            existing.status = status
+        session.add(existing)
+        session.commit()
         return existing.file_id
     keywords_index = build_index_text(alert_content)
     meta_info_str = json.dumps(meta_info, ensure_ascii=False) if meta_info else ""
@@ -47,12 +70,14 @@ def add_alert_report(
         file_id=file_id,
         report_title=report_title,
         file_name=file_name,
+        file_path=file_path,
         alert_content=alert_content,
         meta_info=meta_info_str,
         markdown=markdown,
         keywords_index=keywords_index,
         status=status,
         content_hash=content_hash,
+        extracted=extracted,
     )
     session.add(m)
     session.commit()
@@ -104,6 +129,8 @@ def update_alert_report(
     markdown: str = None,
     status: str = None,
     content_hash: str = None,
+    file_path: str = None,
+    extracted: bool = None,
 ) -> bool:
     """更新告警报告，告警内容变更时自动重建全文索引"""
     m = session.query(AlertReportModel).filter_by(file_id=file_id).first()
@@ -113,6 +140,10 @@ def update_alert_report(
         m.report_title = report_title
     if file_name is not None:
         m.file_name = file_name
+    if file_path is not None:
+        m.file_path = file_path
+    if extracted is not None:
+        m.extracted = extracted
     if alert_content is not None:
         m.alert_content = alert_content
     if meta_info is not None:
@@ -311,8 +342,10 @@ def _report_to_dict(r: AlertReportModel) -> dict:
         "alert_content": r.alert_content or "",
         "meta_info": meta_info,
         "file_name": r.file_name or "",
+        "file_path": r.file_path or "",
         "content_hash": r.content_hash or "",
         "markdown": r.markdown or "",
+        "extracted": bool(r.extracted),
         "status": r.status or "cache",
         "create_time": r.create_time.strftime("%Y-%m-%d %H:%M:%S") if r.create_time else None,
         "update_time": r.update_time.strftime("%Y-%m-%d %H:%M:%S") if r.update_time else None,
@@ -337,10 +370,12 @@ _EXPORT_COLUMNS = [
     ("报告ID", "file_id"),
     ("报告标题", "report_title"),
     ("文件名称", "file_name"),
+    ("文件路径", "file_path"),
     ("内容哈希", "content_hash"),
     ("告警内容", "alert_content"),
     ("告警元信息", "meta_info"),
     ("文档全文", "markdown"),
+    ("是否抽取", "extracted"),
     ("状态", "status"),
     ("创建时间", "create_time"),
     ("更新时间", "update_time"),
@@ -378,8 +413,8 @@ def export_alert_reports_to_excel(session) -> bytes:
             row.append(val)
         ws.append(row)
 
-    # 调整列宽（与_EXPORT_COLUMNS的10列一一对应）
-    col_widths = [34, 30, 25, 18, 50, 40, 50, 10, 20, 20]
+    # 调整列宽（与_EXPORT_COLUMNS的12列一一对应）
+    col_widths = [34, 30, 25, 40, 18, 50, 40, 50, 10, 10, 20, 20]
     for i, width in enumerate(col_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
 
@@ -391,12 +426,11 @@ def export_alert_reports_to_excel(session) -> bytes:
 
 @with_session
 def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
-    """从Excel文件导入告警处置报告，按file_id去重（已存在则跳过），返回导入结果统计。
+    """从Excel文件导入告警处置报告，按文件名去重（同名则覆盖），返回导入结果统计。
 
-    file_id为确定性ID（file_name + content_hash 的SHA-256）：
-    - Excel中带file_id列（本项目导出的文件）：直接使用
-    - 无file_id列（旧格式Excel）：按 (file_name, content_hash) 自动计算，
-      同名同内容 -> 相同file_id -> 去重跳过；同名不同内容 -> 新记录
+    file_id以文件名（file_name）为唯一主键：
+    - 同名同内容 -> 跳过
+    - 同名不同内容 -> 覆盖已有记录
     """
     from openpyxl import load_workbook
 
@@ -419,6 +453,7 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
 
     inserted = 0
     skipped = 0
+    updated = 0
     errors = []
 
     for row_idx, row in enumerate(rows[1:], start=2):
@@ -433,25 +468,21 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
             report_title = get_val("report_title")
             file_id = get_val("file_id")
             file_name = get_val("file_name")
+            file_path = get_val("file_path")
             content_hash = get_val("content_hash")
             alert_content = get_val("alert_content")
             meta_info_str = get_val("meta_info")
             markdown = get_val("markdown")
+            extracted = get_val("extracted").strip().lower() in ("true", "1", "是")
             status = get_val("status") or "cache"
 
             if not report_title:
                 errors.append(f"第{row_idx}行：报告标题为空，跳过")
                 continue
 
-            # file_id缺失时按 (file_name, content_hash) 计算确定性ID
-            if not file_id:
-                file_id = gen_file_id(file_name, content_hash)
-
-            # 按file_id去重（同名同内容会生成相同file_id，跳过）
-            existing = session.query(AlertReportModel).filter_by(file_id=file_id).first()
-            if existing:
-                skipped += 1
-                continue
+            # file_id以文件名为唯一主键
+            if not file_id or not file_name:
+                file_id = gen_file_id(file_name)
 
             # 解析meta_info
             meta_info = {}
@@ -461,6 +492,29 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
                 except (json.JSONDecodeError, TypeError):
                     meta_info = {}
 
+            # 按文件名去重：同名同内容跳过，同名不同内容覆盖
+            existing = session.query(AlertReportModel).filter_by(file_id=file_id).first()
+            if existing:
+                if content_hash and existing.content_hash == content_hash:
+                    skipped += 1
+                    continue
+                existing.report_title = report_title
+                existing.file_name = file_name
+                existing.alert_content = alert_content
+                existing.meta_info = json.dumps(meta_info, ensure_ascii=False) if meta_info else ""
+                existing.markdown = markdown
+                existing.keywords_index = build_index_text(alert_content)
+                existing.content_hash = content_hash
+                existing.extracted = extracted
+                if file_path:
+                    existing.file_path = file_path
+                if status:
+                    existing.status = status
+                session.add(existing)
+                session.commit()
+                updated += 1
+                continue
+
             keywords_index = build_index_text(alert_content)
             meta_info_str_clean = json.dumps(meta_info, ensure_ascii=False) if meta_info else ""
 
@@ -468,12 +522,14 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
                 file_id=file_id,
                 report_title=report_title,
                 file_name=file_name,
+                file_path=file_path,
                 alert_content=alert_content,
                 meta_info=meta_info_str_clean,
                 markdown=markdown,
                 keywords_index=keywords_index,
                 status=status,
                 content_hash=content_hash,
+                extracted=extracted,
             )
             session.add(m)
             session.commit()
@@ -483,7 +539,7 @@ def import_alert_reports_from_excel(session, file_bytes: bytes) -> dict:
             continue
 
     wb.close()
-    return {"inserted": inserted, "skipped": skipped, "errors": errors}
+    return {"inserted": inserted, "updated": updated, "skipped": skipped, "errors": errors}
 
 
 # ==================== 告警规则 导入导出 ====================
@@ -606,17 +662,17 @@ DEFAULT_ALERT_RULES = [
     {
         "rule_code": "RULE_001",
         "name": "内容完整性检查",
-        "description": "内容要完整，包括原因分析、整改结果、佐证材料等内容，关键信息无缺失。如设备的型号、故障排查过程，是否举一反三进行了全面排查和整改等。",
+        "description": "报告应包含原因分析、整改结果、故障排查过程，以及是否举一反三进行了全面排查和整改等。",
     },
     {
         "rule_code": "RULE_002",
         "name": "逻辑一致性检查",
-        "description": "由大模型对报告全文进行阅读，分析有没有逻辑不通的内容，比如前后不一致、原因分析与处置措施没有关联关系等等，结合知识库判断内容有没有错误的地方。",
+        "description": "通读全文，识别前后矛盾、处置措施与原因不匹配等逻辑问题；结合知识库判别内容、定性是否存在错误。",
     },
     {
         "rule_code": "RULE_003",
         "name": "四不放过原则检查",
-        "description": "针对有威胁的告警，目前就是违规外联这一种类型的告警，要按照四不放过原则去审视告警分析报告，事故原因有没有查清楚、有没有对责任人员的处理结果、报告中的整改措施有没有落实的佐证、有关人员有没有受到教育比如有没有培训记录等等。读分析报告有没有做到这四个方面。",
+        "description": "针对违规外联这一种类型的告警，要按照四不放过原则去审视告警分析报告，事故原因有没有查清楚、有没有对责任人员的处理结果、报告中的整改措施有没有落实的佐证、有关人员有没有受到教育比如有没有培训记录等等。",
     },
 ]
 

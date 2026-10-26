@@ -572,7 +572,6 @@
                 <button class="btn btn-info" onclick="exportExcel()">📥 导出Excel</button>
                 <button class="btn btn-primary" onclick="showImportExcelModal()">📤 导入Excel</button>
                 <button class="btn btn-upload" onclick="showUploadModal()">📤 批量上传</button>
-                <button class="btn btn-success" onclick="showAddModal()">➕ 新建报告</button>
             </div>
         </div>
 
@@ -607,8 +606,8 @@
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-icon">📁</div>
                     <div class="upload-text">点击或拖拽文件到此处上传（支持多选）</div>
-                    <div class="upload-hint">支持 PDF、Word、图片等文件格式</div>
-                    <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" multiple onchange="handleFileSelect(event)">
+                    <div class="upload-hint">支持 PDF 格式，上传解析完成后窗口自动关闭</div>
+                    <input type="file" id="fileInput" accept=".pdf" multiple onchange="handleFileSelect(event)">
                 </div>
                 <div class="upload-file-list" id="fileList"></div>
                 <div class="upload-progress" id="uploadProgress" style="display:none">
@@ -621,45 +620,6 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeUploadModal()">取消</button>
                 <button class="btn btn-primary" id="uploadBtn" onclick="uploadFiles()" disabled>开始上传</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 新增/编辑弹窗 -->
-    <div class="modal-overlay" id="reportModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 id="modalTitle">新建报告</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="fileId">
-                <div class="form-group">
-                    <label>报告标题 *</label>
-                    <input type="text" id="reportTitle" placeholder="请输入报告标题">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>文件名称</label>
-                        <input type="text" id="fileName" placeholder="请输入文件名称">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>告警内容 <span style="color:#e65100;font-size:12px">（用于全文检索索引）</span></label>
-                    <textarea id="alertContent" placeholder="请输入告警详细内容"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>告警元信息</label>
-                    <textarea id="metaInfo" placeholder="请输入告警元信息（JSON格式）"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>文档全文 <span style="color:#999;font-size:12px">（markdown）</span></label>
-                    <textarea id="markdownText" class="large" placeholder="请输入文档全文（markdown）"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
-                <button class="btn btn-success" onclick="saveReport()">保存</button>
             </div>
         </div>
     </div>
@@ -789,6 +749,22 @@
             listEl.innerHTML = html;
         }
 
+        // 上传单个报告文件（仅上传并解析入库，不创建审计任务）
+        async function uploadSingleFile(file) {
+            const formData = new FormData();
+            formData.append('files', file);
+            const response = await fetch(API_BASE_URL + '/api/alert-reports/batch-upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+            const detail = result.data && result.data.details && result.data.details[0];
+            if (!result.success || !detail || detail.status !== 'success') {
+                throw new Error((detail && detail.message) || result.message || '上传失败');
+            }
+            return detail;
+        }
+
         async function uploadFiles() {
             if (selectedFiles.length === 0) return;
             const uploadBtn = document.getElementById('uploadBtn');
@@ -796,91 +772,56 @@
             uploadBtn.textContent = '上传中...';
             const progressEl = document.getElementById('uploadProgress');
             progressEl.style.display = 'block';
-            document.getElementById('uploadResultList').style.display = 'none';
-            document.getElementById('uploadResultList').innerHTML = '';
+            const resultEl = document.getElementById('uploadResultList');
+            resultEl.style.display = 'none';
+            resultEl.innerHTML = '';
 
-            if (selectedFiles.length === 1) {
-                // 单文件也走批量上传接口（files列表）
-                const file = selectedFiles[0];
-                document.getElementById('progressFill').style.width = '50%';
-                document.getElementById('progressText').textContent = '正在上传: ' + file.name;
+            let successCount = 0;
+            let failCount = 0;
+            const resultList = [];
+            const total = selectedFiles.length;
 
-                const formData = new FormData();
-                formData.append('files', file);
+            for (let i = 0; i < total; i++) {
+                const file = selectedFiles[i];
+                document.getElementById('progressFill').style.width = Math.round((i / total) * 100) + '%';
+                document.getElementById('progressText').textContent =
+                    '正在上传解析: ' + file.name + ' (' + (i + 1) + '/' + total + ')';
 
                 try {
-                    const response = await fetch(API_BASE_URL + '/api/alert-reports/batch-upload', {
-                        method: 'POST',
-                        body: formData,
-                    });
-                    const result = await response.json();
-                    document.getElementById('progressFill').style.width = '100%';
-                    const detail = result.data && result.data.details && result.data.details[0];
-                    if (result.success && detail && detail.status === 'success') {
-                        document.getElementById('progressText').textContent = '上传完成';
-                        showToast('上传成功');
-                    } else {
-                        document.getElementById('progressText').textContent = '上传失败';
-                        showToast('上传失败: ' + (detail && detail.message || result.message || '未知错误'), 'error');
-                    }
+                    await uploadSingleFile(file);
+                    successCount++;
+                    resultList.push({ name: file.name, status: 'success', message: '解析完成' });
                 } catch (error) {
-                    document.getElementById('progressText').textContent = '上传异常';
-                    showToast('上传异常: ' + error.message, 'error');
+                    failCount++;
+                    resultList.push({ name: file.name, status: 'fail', message: error.message });
                 }
-            } else {
-                // 多文件使用批量上传接口，逐个上传并显示进度
-                let successCount = 0;
-                let failCount = 0;
-                const resultList = [];
-
-                for (let i = 0; i < selectedFiles.length; i++) {
-                    const file = selectedFiles[i];
-                    const percent = Math.round(((i + 1) / selectedFiles.length) * 100);
-                    document.getElementById('progressFill').style.width = percent + '%';
-                    document.getElementById('progressText').textContent = '正在上传: ' + file.name + ' (' + (i + 1) + '/' + selectedFiles.length + ')';
-
-                    const formData = new FormData();
-                    formData.append('files', file);
-
-                    try {
-                        const response = await fetch(API_BASE_URL + '/api/alert-reports/batch-upload', {
-                            method: 'POST',
-                            body: formData,
-                        });
-                        const result = await response.json();
-                        const detail = result.data && result.data.details && result.data.details[0];
-                        if (result.success && detail && detail.status === 'success') {
-                            successCount++;
-                            resultList.push({ name: file.name, status: 'success', message: detail.message || '成功' });
-                        } else {
-                            failCount++;
-                            resultList.push({ name: file.name, status: 'fail', message: (detail && detail.message) || result.message || '未知错误' });
-                        }
-                    } catch (error) {
-                        failCount++;
-                        resultList.push({ name: file.name, status: 'fail', message: error.message });
-                    }
-                }
-
-                document.getElementById('progressText').textContent = '上传完成：成功 ' + successCount + ' 个，失败 ' + failCount + ' 个';
-
-                // 显示结果列表
-                let resultHtml = '';
-                resultList.forEach(item => {
-                    const icon = item.status === 'success' ? '✅' : '❌';
-                    resultHtml += '<div class="upload-result-item ' + item.status + '">' +
-                        icon + ' ' + escapeHtml(item.name) + (item.status === 'fail' ? ' - ' + escapeHtml(item.message) : '') +
-                        '</div>';
-                });
-                const resultEl = document.getElementById('uploadResultList');
-                resultEl.innerHTML = resultHtml;
-                resultEl.style.display = 'block';
-
-                showToast('批量上传完成：成功 ' + successCount + ' 个，失败 ' + failCount + ' 个', failCount > 0 ? 'error' : 'success');
+                document.getElementById('progressFill').style.width = Math.round(((i + 1) / total) * 100) + '%';
             }
 
+            document.getElementById('progressText').textContent =
+                '处理完成：成功 ' + successCount + ' 个，失败 ' + failCount + ' 个';
+
+            let resultHtml = '';
+            resultList.forEach(item => {
+                const icon = item.status === 'success' ? '✅' : '❌';
+                resultHtml += '<div class="upload-result-item ' + item.status + '">' +
+                    icon + ' ' + escapeHtml(item.name) +
+                    (item.status === 'fail' ? ' - ' + escapeHtml(item.message) : '') +
+                    '</div>';
+            });
+            resultEl.innerHTML = resultHtml;
+            resultEl.style.display = 'block';
+
+            showToast('处理完成：成功 ' + successCount + ' 个，失败 ' + failCount + ' 个', failCount > 0 ? 'error' : 'success');
+
             uploadBtn.textContent = '开始上传';
-            loadReports();
+            uploadBtn.disabled = true;
+
+            // 解析完成后自动关闭窗口并刷新列表
+            setTimeout(() => {
+                closeUploadModal();
+                loadReports();
+            }, 1200);
         }
 
         // 拖拽支持
@@ -944,7 +885,7 @@
         function renderReportsTable(reports) {
             const tbody = document.getElementById('reportsTableBody');
             if (reports.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无报告，点击"新建报告"创建</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无报告，请点击"批量上传"上传报告</td></tr>';
                 return;
             }
 
@@ -965,7 +906,6 @@
                     '<td>' + (r.update_time || '-') + '</td>' +
                     '<td><div class="rule-actions">' +
                         '<button class="btn-view" onclick="viewReport(\'' + r.file_id + '\')">详情</button>' +
-                        '<button class="btn-edit" onclick="editReport(\'' + r.file_id + '\')">编辑</button>' +
                         confirmBtn +
                         '<button class="btn-delete" onclick="deleteReport(\'' + r.file_id + '\')">删除</button>' +
                     '</div></td>' +
@@ -994,34 +934,6 @@
                 }
             } catch (error) {
                 tbody.innerHTML = '<tr><td colspan="7" class="empty-state">检索异常</td></tr>';
-            }
-        }
-
-        function showAddModal() {
-            document.getElementById('modalTitle').textContent = '新建报告';
-            document.getElementById('fileId').value = '';
-            document.getElementById('reportTitle').value = '';
-            document.getElementById('fileName').value = '';
-            document.getElementById('alertContent').value = '';
-            document.getElementById('metaInfo').value = '';
-            document.getElementById('markdownText').value = '';
-            document.getElementById('reportModal').classList.add('active');
-        }
-
-        async function editReport(fileId) {
-            const result = await apiRequest('/api/alert-reports/detail/' + fileId);
-            if (result.success && result.data) {
-                const r = result.data;
-                document.getElementById('modalTitle').textContent = '编辑报告';
-                document.getElementById('fileId').value = r.file_id;
-                document.getElementById('reportTitle').value = r.report_title || '';
-                document.getElementById('fileName').value = r.file_name || '';
-                document.getElementById('alertContent').value = r.alert_content || '';
-                document.getElementById('metaInfo').value = r.meta_info ? JSON.stringify(r.meta_info, null, 2) : '';
-                document.getElementById('markdownText').value = r.markdown || '';
-                document.getElementById('reportModal').classList.add('active');
-            } else {
-                showToast('获取报告详情失败', 'error');
             }
         }
 
@@ -1059,51 +971,8 @@
             }
         }
 
-        function closeModal() {
-            document.getElementById('reportModal').classList.remove('active');
-        }
-
         function closeDetailModal() {
             document.getElementById('detailModal').classList.remove('active');
-        }
-
-        async function saveReport() {
-            const fileId = document.getElementById('fileId').value;
-            const reportTitle = document.getElementById('reportTitle').value.trim();
-            if (!reportTitle) {
-                showToast('请输入报告标题', 'error');
-                return;
-            }
-
-            const metaInfoRaw = document.getElementById('metaInfo').value.trim();
-            const data = {
-                report_title: reportTitle,
-                file_name: document.getElementById('fileName').value.trim(),
-                alert_content: document.getElementById('alertContent').value.trim(),
-                meta_info: metaInfoRaw ? JSON.parse(metaInfoRaw) : null,
-                markdown: document.getElementById('markdownText').value.trim(),
-            };
-
-            let result;
-            if (fileId) {
-                result = await apiRequest('/api/alert-reports/update/' + fileId, {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-            } else {
-                result = await apiRequest('/api/alert-reports/create', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-            }
-
-            if (result.success) {
-                showToast(fileId ? '报告更新成功' : '报告创建成功');
-                closeModal();
-                loadReports();
-            } else {
-                showToast(result.message || '保存失败', 'error');
-            }
         }
 
         async function confirmReport(fileId) {
@@ -1129,10 +998,6 @@
                 showToast(result.message || '删除失败', 'error');
             }
         }
-
-        document.getElementById('reportModal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
-        });
 
         document.getElementById('detailModal').addEventListener('click', function(e) {
             if (e.target === this) closeDetailModal();

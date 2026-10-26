@@ -350,7 +350,9 @@ class AlertReport(BaseModel):
     meta_info: Optional[dict] = Field(default=None, description="告警元信息（JSON对象）")
     file_name: Optional[str] = Field(default=None, description="文件名称")
     file_id: Optional[str] = Field(default=None, description="文件ID")
-    content_hash: Optional[str] = Field(default=None, description="文件内容SHA-256哈希（内容去重键）")
+    file_path: Optional[str] = Field(default=None, description="文件存储路径")
+    content_hash: Optional[str] = Field(default=None, description="文件内容SHA-256哈希（同名时判断内容是否变化）")
+    extracted: Optional[bool] = Field(default=None, description="是否已通过大模型抽取结构化信息")
     markdown: Optional[str] = Field(default=None, description="markdown")
     status: Optional[str] = Field(default=None, description="状态：cache=缓存, saved=已保存")
 

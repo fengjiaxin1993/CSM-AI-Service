@@ -1,7 +1,6 @@
 import os
 import json
 import hashlib
-import re
 from typing import Dict, List
 
 from fastapi import UploadFile, File
@@ -63,59 +62,74 @@ def get_warning_report_json_by_filepath(
     file_name: str = "",
     content_hash: str = "",
 ) -> BaseResponse:
+    """获取报告结构化json：先查库，命中且已抽取则直接返回；未抽取（extracted=False）则重新走大模型抽取并回写。"""
 
     if not content_hash and file_path and os.path.exists(file_path):
         with open(file_path, "rb") as f:
             content_hash = compute_file_hash(f.read())
-    # 先查数据库：按确定性file_id精确命中（file_name + content_hash 相同视为同一篇报告）
-    if file_name and content_hash:
-        existing = get_alert_report_by_file_id(file_id=gen_file_id(file_name, content_hash))
-    else:
-        existing = None
+    file_id = gen_file_id(file_name) if file_name else ""
+    existing = get_alert_report_by_file_id(file_id=file_id) if file_id else None
     if existing is not None:
-        return BaseResponse(data=existing.get("meta_info", init_report_json_data()))
-    # 数据库中没有，解析文件并缓存
+        # 同名同内容且已通过大模型抽取：直接采用
+        if existing.get("extracted") and content_hash and existing.get("content_hash") == content_hash:
+            return BaseResponse(data=existing.get("meta_info", init_report_json_data()))
+        if existing.get("extracted") and not content_hash:
+            return BaseResponse(data=existing.get("meta_info", init_report_json_data()))
+
+    # 数据库中没有 / 未抽取 / 内容已变化：解析文件并抽取
     try:
-        markdown_content = pdf_to_markdown(file_path)
+        markdown_content = existing.get("markdown", "") if existing else ""
+        if not markdown_content or existing.get("content_hash") != content_hash:
+            markdown_content = pdf_to_markdown(file_path)
         result = extract_json_from_markdown(markdown_content)
-        # 解析成功后缓存到数据库（status=cache）
-        try:
-            add_alert_report(
-                report_title=result["报告标题"],
-                file_name=file_name,
-                alert_content=result["告警内容"],
-                meta_info=result,
-                markdown=markdown_content,
-                status="cache",
-                content_hash=content_hash,
-            )
-        except Exception as e:
-            logger.warning(f"缓存报告到数据库失败（不影响返回结果）: {e}")
-        return BaseResponse(data=result)
     except Exception as e:
+        # 已有缓存的结构化数据时降级返回，否则报错
+        if existing is not None and existing.get("meta_info"):
+            logger.warning(f"抽取{file_name}失败，返回已有数据: {e}")
+            return BaseResponse(data=existing.get("meta_info", init_report_json_data()))
         return BaseResponse(code=202, msg=f"解析{file_name}失败，报错信息{e}", data={})
 
+    # 抽取成功后落库（status=cache），同名同内容直接采用，同名不同内容覆盖
+    try:
+        add_alert_report(
+            report_title=result["报告标题"],
+            file_name=file_name,
+            alert_content=result["告警内容"],
+            meta_info=result,
+            markdown=markdown_content,
+            status=(existing or {}).get("status") or "cache",
+            content_hash=content_hash,
+            file_id=file_id,
+            file_path=file_path,
+            extracted=True,
+        )
+    except Exception as e:
+        logger.warning(f"缓存报告到数据库失败（不影响返回结果）: {e}")
+    return BaseResponse(data=result)
 
 
-def gen_new_filename_by_hash(file_name, content_hash):
-    stem, ext = os.path.splitext(file_name)
-    new_file_name = f"{stem}_{content_hash[-4:]}{ext}"
-    return new_file_name
-
-
-
-# 保存告警处置报告
+# 保存告警处置报告到磁盘：以文件名为唯一主键，重名时同内容直接采用、不同内容直接覆盖
 def save_to_warning_report_file(file: UploadFile):
-    file_name = file.filename
+    file_name = os.path.basename(file.filename or "")
+    if not file_name:
+        raise ValueError("文件名为空")
     file_content = file.file.read()  # 读取上传文件的内容
     content_hash = compute_file_hash(file_content)
-    # 存储规则：{stem}_{content_hash后四位}{ext}，如 test.pdf + hash(gfjkladgnksdfng) -> test_dfng.pdf
-    new_file_name = gen_new_filename_by_hash(file_name, content_hash)
-    new_file_path = os.path.join(Settings.basic_settings.WARNING_REPORT_DIR, new_file_name)
-    if not os.path.exists(new_file_path):
-        with open(new_file_path, "wb") as f:
+    os.makedirs(Settings.basic_settings.WARNING_REPORT_DIR, exist_ok=True)
+    file_path = os.path.join(Settings.basic_settings.WARNING_REPORT_DIR, file_name)
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            old_content_hash = compute_file_hash(f.read())
+        if old_content_hash != content_hash:
+            # 同名不同内容：直接覆盖
+            logger.info(f"检测到同名不同内容文件{file_name}，已覆盖")
+            with open(file_path, "wb") as f:
+                f.write(file_content)
+        # 同名同内容：直接采用，无需写入
+    else:
+        with open(file_path, "wb") as f:
             f.write(file_content)
-    return str(new_file_path), content_hash
+    return str(file_path), content_hash
 
 
 
@@ -137,7 +151,7 @@ def get_rules_desc(limit: int = 5):
     return "\n".join(results)
 
 
-# 一次性返回研判结果
+# 一次性返回研判结果()
 def warning_analyze_process(file: UploadFile = File(..., description="上传文件")) -> BaseResponse:
     # 【step1】 获取告警处置报告信息
     new_file_path, content_hash = save_to_warning_report_file(file)
@@ -190,16 +204,16 @@ def save_warning_report(
         file: UploadFile = File(..., description="上传文件"),
 ) -> BaseResponse:
     # 先落盘并计算内容哈希（文件流只能读一次，故不经过get_alarm_report_info重复读取）
-    new_file_path, content_hash = save_to_warning_report_file(file)
+    file_path, content_hash = save_to_warning_report_file(file)
     report_response = get_warning_report_json_by_filepath(
-        new_file_path, file_name=file.filename, content_hash=content_hash
+        file_path, file_name=str(file.filename), content_hash=content_hash
     )
     if report_response.code != 200:
         return BaseResponse(code=report_response.code, msg=f"解析报告失败，无法保存: {report_response.msg}")
     report_data = report_response.data
     try:
-        # 按确定性file_id查询是否已在数据库（file_name + content_hash 相同视为同一篇报告）
-        existing = get_alert_report_by_file_id(file_id=gen_file_id(file.filename, content_hash))
+        # 以文件名为唯一主键查询是否已在数据库
+        existing = get_alert_report_by_file_id(file_id=gen_file_id(file.filename))
         if existing is None:
             # 不在数据库中，新增，状态为saved
             file_id = add_alert_report(
@@ -209,6 +223,8 @@ def save_warning_report(
                 meta_info=report_data,
                 status="saved",
                 content_hash=content_hash,
+                file_path=file_path,
+                extracted=True,
             )
             return BaseResponse(code=200, msg=f"新增保存成功,file_id={file_id}")
         else:
@@ -222,6 +238,8 @@ def save_warning_report(
                     markdown=existing.get("markdown", ""),
                     status="saved",
                     content_hash=content_hash,
+                    file_path=file_path,
+                    extracted=True,
                 )
                 return BaseResponse(code=200, msg=f"缓存报告已确认保存,file_id={existing['file_id']}")
             else:
@@ -231,6 +249,9 @@ def save_warning_report(
                     report_title=report_data["报告标题"],
                     alert_content=report_data["告警内容"],
                     meta_info=report_data,
+                    content_hash=content_hash,
+                    file_path=file_path,
+                    extracted=True,
                 )
                 return BaseResponse(code=200, msg=f"报告已更新,file_id={existing['file_id']}")
     except Exception as e:

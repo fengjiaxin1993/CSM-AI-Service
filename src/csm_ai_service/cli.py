@@ -51,6 +51,12 @@ def init():
     logger.info("开始创建相关表信息")
     create_tables()
     logger.info("创建表信息：成功。")
+
+    # 初始化默认告警处置规则（按 rule_code 去重，重复执行不会重复插入）
+    from csm_ai_service.server.db.repository.alert_repository import init_default_alert_rules
+    inserted_ids = init_default_alert_rules()
+    logger.info(f"初始化默认告警处置规则：新增 {len(inserted_ids)} 条")
+
     Settings.create_all_templates()
     Settings.set_auto_reload(True)
 

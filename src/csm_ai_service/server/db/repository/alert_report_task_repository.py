@@ -18,6 +18,7 @@ def add_alert_report_task(
     file_name: str,
     content_hash: str,
     status: str = "pending",
+    file_path: str = "",
 ) -> str:
     """
     新增预警报告审计任务记录，返回 task_id
@@ -26,6 +27,7 @@ def add_alert_report_task(
         task_id=task_id,
         file_id=file_id,
         file_name=file_name,
+        file_path=file_path,
         content_hash=content_hash,
         status=status,
     )
@@ -69,6 +71,7 @@ def update_alert_report_task(
     audit_status: str = None,
     result_json: str = None,
     error_message: str = None,
+    file_path: str = None,
     pdf_start_time=None,
     pdf_end_time=None,
     audit_start_time=None,
@@ -78,6 +81,8 @@ def update_alert_report_task(
     m = session.query(AlertReportTaskModel).filter_by(task_id=task_id).first()
     if m is None:
         return False
+    if file_path is not None:
+        m.file_path = file_path
     if status is not None:
         m.status = status
     if pdf_status is not None:
@@ -125,6 +130,7 @@ def _task_to_dict(t: AlertReportTaskModel) -> dict:
         "task_id": t.task_id,
         "file_id": t.file_id,
         "file_name": t.file_name,
+        "file_path": t.file_path or "",
         "content_hash": t.content_hash,
         "status": t.status,
         "pdf_status": t.pdf_status,

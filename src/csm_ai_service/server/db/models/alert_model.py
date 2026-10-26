@@ -1,7 +1,7 @@
 """
 历史告警处置报告知识库模型
 """
-from sqlalchemy import Column, String, Text, DateTime, Integer
+from sqlalchemy import Column, String, Text, DateTime, Integer, Boolean
 from csm_ai_service.server.db.base import Base
 from csm_ai_service.server.db.models.base import get_shanghai_time
 
@@ -10,17 +10,20 @@ class AlertReportModel(Base):
     """
     历史告警处置报告 - 存储告警处置全流程信息
     status: "cache" 缓存状态（首次插入），"saved" 已保存状态（明确确认保存）
-    同名不同内容：file_name 不唯一，通过 content_hash（SHA-256）判定是否为同一篇内容
+    以 file_name 为唯一主键：同名且内容哈希相同 -> 视为同一篇报告（直接复用）；
+    同名但内容哈希不同 -> 直接覆盖原记录。
     """
     __tablename__ = "alert_report"
 
-    file_id = Column(String(64), primary_key=True, index=True, default="", comment="报告唯一ID")
+    file_id = Column(String(64), primary_key=True, index=True, default="", comment="报告唯一ID（由文件名生成）")
     report_title = Column(String(255), default="", comment="报告标题")
     alert_content = Column(Text, default="", comment="告警内容")
     meta_info = Column(Text, default="", comment="告警元信息")
-    file_name = Column(String(255), default="", index=True, comment="报告文件名称（普通索引，允许同名）")
-    content_hash = Column(String(64), default="", index=True, comment="内容SHA-256哈希（内容去重键）")
+    file_name = Column(String(255), default="", index=True, comment="报告文件名称")
+    file_path = Column(String(512), default="", comment="报告文件存储路径")
+    content_hash = Column(String(64), default="", index=True, comment="内容SHA-256哈希（同名时判断内容是否变化）")
     markdown = Column(Text, default="", comment="文档markdown")
+    extracted = Column(Boolean, default=False, index=True, comment="是否已通过大模型抽取结构化信息")
     status = Column(String(20), default="cache", nullable=False, comment="状态：cache=缓存, saved=已保存")
 
     # 全文检索索引字段：对告警内容做jieba分词后的结果
