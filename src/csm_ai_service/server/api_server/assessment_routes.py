@@ -23,34 +23,27 @@ monitoring_assessment_router = APIRouter(prefix="/assessment", tags=["检测评�
 def detect_duplicate_issues_api(request: DuplicateDetectRequest):
     """
     从历年的等保测评报告中找出相似的重复问题。
-
-    输入（按年份组织，字段均为字符串）：2026年对应一堆问题，2027年对应一堆问题。
-    {
-      "items": [
-        {"year": "2026", "issues": [
-          {"content": "未对登录的用户进行身份标识唯一性检查", "securityType": "安全计算环境", "riskLevel": "中"},
-          {"content": "网络设备未启用安全的远程管理协议", "securityType": "安全区域边界", "riskLevel": "低"}
-        ]},
-        {"year": "2027", "issues": [
-          {"content": "未对登录的用户进行身份标识唯一性检查", "securityType": "安全计算环境", "riskLevel": "中"}
-        ]}
-      ],
-      "method": "keyword",
-      "threshold": 0.60
-    }
-
     处理逻辑：
-    1. 按（安全类型, 风险级别）字符串分组，只有两者都相同的问题才会互相比较；
-    2. 组内计算两两文本相似度（纯本地计算，不依赖向量模型），method 可选：
-       - keyword       jieba 分词 + 词集合 Jaccard（关键词重合度，默认）
-       - edit_distance 字符级 Levenshtein 编辑距离归一化（捕捉字面改写）
-       - ngram         字符 n-gram 余弦相似度（局部字序鲁棒）
-       - combo         多方法加权融合（methodWeights 自定义权重，默认 keyword 0.4 / edit_distance 0.3 / ngram 0.3）
-    3. 连通聚类（并查集）：任意一对相似度 >= threshold 即合并进同一个簇；
-       threshold 不传时用方法默认值（keyword 0.60 / edit_distance 0.75 / ngram 0.70 / combo 0.70），可用少量标注样本调参；
-    4. 每一个簇 = 同一个根源重复问题，输出出现次数及簇内每一条的年份、原文。
+    1. 仅按安全类型分组，同一安全类型的问题才互相比较（风险级别只用于统计，不参与分组）；
+    2. 相似度统一使用 keyword 关键词法（jieba 分词 + 词集合 Jaccard，纯本地计算，不依赖向量模型）；
+    3. 逐年递进聚类：
+       a) 最早年份的每条问题各自成簇；
+       b) 之后每年逐条与已有簇比较，只与簇内【最后年份】的成员计算相似度，
+          相似度 >= threshold 且该簇尚未出现本年度问题 -> 挂入相似度最高的簇；
+       c) 同一簇内同一年份最多一条问题（同年互斥），不可挂入时新开一簇；
+       threshold 不传时用默认值 0.90；
+    4. 每一个簇 = 同一个根源重复问题，输出出现次数及簇内每一条的年份、原文、风险、整改状态；
+    5. 统计窗口 = startYear ~ endYear（含首尾），逐年输出；某年重复问题需与上一年比对，
+       若上一年数据未传入（如 startYear=2024 但未传 2023 的数据），该年重复问题数按 0 统计，其余统计不变。
 
-    输出：重复问题簇列表（按出现次数降序），包含 method、threshold、count（出现次数）、years、representativeContent（代表性表述）、occurrences（年份+原文明细）。
+    输出：
+    - clusters：重复问题簇列表（按出现次数降序），含 count（出现次数）、years、riskLevel / rectified / content
+      （均取簇内最后一个年份的信息）、occurrences（年份+原文+风险+整改状态明细）；
+    - overview：总览统计，含 duplicateClusterCount（重复簇个数）、
+      rectifiedCount / unrectifiedCount（按最后一年统计的已/未整改簇数）、
+      riskDistribution（高/中/低风险簇数，按最后一年统计）、securityTypeDistribution（安全类型分布）；
+    - yearlyRectification：历年整改情况，含每年问题总数、已整改数量、未整改数量、重复问题数量（与去年比对）；
+    - yearlyDuplicates：历年重复问题及风险分布，含每年问题总数、重复问题条数、riskDistribution（高/中/低风险条数）。
     """
     try:
         result = detect_duplicate_issues(request)

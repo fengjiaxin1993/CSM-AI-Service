@@ -1,27 +1,29 @@
 """
 监测评估模块 —— 历年等保测评报告重复问题检测
 
-功能：从历年的等保测评报告中找出相似的重复问题。
-输入：按年份组织的问题明细（每个年份对应一堆问题，每个问题包含问题描述、安全类型、风险级别，均为字符串）。
-输出：每个重复问题簇（= 同一个根源重复问题）及其出现次数，簇内带上每一条的年份、原文。
+功能：从历年的等保测评报告中找出相似的重复问题，并输出整改情况与历年统计。
+输入：按年份组织的问题明细（每个年份对应一堆问题，每个问题包含问题描述、安全类型、风险级别、整改状态），
+     以及统计开始年份与结束年份。
+输出：
+1. 每个重复问题簇（= 同一个根源重复问题）及其出现次数，簇内带上每一条的年份、原文、风险、整改状态；
+2. 总览统计：重复簇个数、已整改/未整改个数（按簇内最后一年统计）、
+   高风险/中风险/低风险分布（按最后一年统计）、安全类型分布；
+3. 历年整改情况：统计窗口内每年已整改问题数量、重复问题数量（与上一年度比对）；
+4. 历年重复问题及风险分布：每年重复问题条数、高/中/低风险条数。
 
 处理逻辑：
-1. 首先根据安全类型和风险级别分类（字符串直接比较），
-   只有安全类型和风险级别相同的才放入同一个比对分组；
-2. 组内：计算两两文本相似度（纯本地计算，不依赖向量模型），支持多种方法（method 参数可选）：
-   - keyword       jieba 分词 + 词集合 Jaccard（关键词重合度，默认）
-   - edit_distance 字符级 Levenshtein 编辑距离归一化（字面改写）
-   - ngram         字符 n-gram 余弦相似度（局部字序鲁棒）
-   - combo         以上方法的加权融合（默认 keyword 0.4 / edit_distance 0.3 / ngram 0.3）
-3. 连通聚类（并查集）：设定相似度阈值（各方法默认值不同，可用少量标注样本调参），
-   任意一对相似度 >= 阈值 -> 执行并查集合并，归入同一个簇；
-4. 跨年份约束（crossYearOnly，默认开启）：同一个簇内同一年份最多保留一条问题，
-   即同一年份的所有问题不会被聚到一起，只有不同年份的问题才可能落在同一个聚类中；
-5. 每一个簇 = 同一个根源重复问题，输出出现次数及簇内每条明细（年份、原文）。
+1. 分组：仅按安全类型分类，同一安全类型的问题才互相比较（风险级别不参与分组）；
+2. 相似度：仅使用 keyword 关键词法（jieba 分词 + 词集合 Jaccard），纯本地计算；
+3. 逐年递进聚类：
+   a) 最早年份的每条问题各自成簇；
+   b) 之后每年逐条与已有簇比较，相似度 >= 阈值且该簇尚未出现本年度问题 -> 挂入相似度最高的簇；
+   c) 同一簇内同一年份最多一条问题（同年互斥），不可挂入时新开一簇；
+4. 统计：整改/风险按簇内最后一年信息统计；历年重复问题 = 今年出现且去年出现过的问题。
 
 说明：
-- 输入全部为字符串（年份、问题描述、安全类型、风险级别），无需字典/编码转换；
-- 各相似度方法的实现见 text_similarity.py。
+- 相似度实现见 text_similarity.py，统计口径见 issue_statistics.py；
+- 统计窗口为 startYear ~ endYear（含首尾）；某年重复问题需与上一年比对，
+  若上一年数据未传入，则该年重复问题数按 0 统计。
 """
 import logging
 
@@ -37,17 +39,15 @@ def detect_duplicate_issues(request: DuplicateDetectRequest) -> DuplicateDetectR
     """
     重复问题检测 API 入口。
 
-    输入：按年份组织的问题明细（每个年份对应一堆问题，字段均为字符串：
-    问题描述 content、安全类型 securityType、风险级别 riskLevel）。
-    可选：相似度方法 method（keyword / edit_distance / ngram / combo）、
-    相似度阈值 threshold（None 用方法默认）、融合权重 methodWeights（combo 时生效）。
-    输出：每个重复问题簇（= 同一个根源重复问题）、出现次数，簇内带上每一条的年份、原文。
+    输入：按年份组织的问题明细（每个年份对应一堆问题，字段为：
+    问题描述 content、安全类型 securityType、风险级别 riskLevel、是否已整改 rectified），
+    以及统计开始年份 startYear、结束年份 endYear。
+    可选：相似度阈值 threshold（None 用默认 0.60）。
+    输出：重复问题簇（含明细）+ 总览统计 + 历年整改 + 历年重复问题及风险分布。
     """
     return detect_duplicate_issues_from_items(
         items=request.items,
+        start_year=request.startYear,
+        end_year=request.endYear,
         threshold=request.threshold,
-        method=request.method,
-        include_singletons=request.includeSingletons,
-        method_weights=request.methodWeights,
-        cross_year_only=request.crossYearOnly,
     )

@@ -1,264 +1,259 @@
 # ====================== 聚类算法 ======================
-from typing import List, Dict, Optional, Tuple
+"""
+问题聚类：把历年相似的问题归成一个个"簇"（一个簇 = 同一个根源问题）。
 
-import numpy as np
+整体思路只有两步：
+1. 先按【安全类型】分类：不同安全类型的问题互不比较；
+2. 在同一安全类型内部做聚类：按年份从早到晚逐条处理，
+   每条问题要么挂到已存在的簇里，要么自己开一个新簇。
+   硬性约束：同一年份的问题不能进入同一个簇。
+
+比较相似度时，只与簇内【最后一个年份】的成员比较（不看更早的成员，
+因为簇内按年份递进串联，最新一年的表述才代表现状），
+用"关键词词集合的 Jaccard 值"（见 text_similarity.py），相似度 >= 阈值 才算同一个问题。
+
+代码里用两个小的数据类代替裸下标：
+- IssueNode：一条问题及其预分词结果（只分词一次）；
+- ProblemCluster：一个簇及其成员，并提供"今年能不能收这条问题""相似度多少"等方法。
+"""
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
 
 from csm_ai_service.server.assessment.api_scheme import YearlyIssues, FlatIssue, DuplicateDetectResponse, \
     DuplicateCluster, ClusterOccurrence
+from csm_ai_service.server.assessment.issue_statistics import (
+    build_duplicate_overview,
+    build_yearly_duplicates,
+    build_yearly_rectification,
+    collect_year_items,
+    resolve_report_years,
+)
 from csm_ai_service.server.assessment.text_similarity import (
-    METHOD_KEYWORD,
-    build_group_similarity_matrix,
-    resolve_threshold,
+    EncodedText,
+    TextEncoder,
+    encode_similarity, DEFAULT_THRESHOLD,
 )
 
 
+# ====================== 数据结构 ======================
+
+@dataclass
+class IssueNode:
+    """一条问题：原始信息 + 预计算结果（分词只做一次）"""
+    content: str
+    security_type: str
+    risk_level: str
+    rectified: bool
+    encoded: EncodedText       # 归一化后的文本 + 关键词集合
+    year: int                  # 年份（int）
+
+
+@dataclass
+class ProblemCluster:
+    """一个簇：同一根源问题的历年记录，成员按年份升序"""
+    security_type: str
+    members: List[IssueNode] = field(default_factory=list)
+    # 已收录的年份（增量维护，避免每次判断都重建集合）
+    occupied_years: Set[int] = field(default_factory=set)
+
+    def accepts(self, issue: IssueNode) -> bool:
+        """该簇能否接收这条问题：同一年份最多一条（同年互斥）"""
+        return issue.year not in self.occupied_years
+
+    def latest(self) -> Optional[IssueNode]:
+        """簇内最后一个年份的成员（成员按年份升序，即最后一条）；空簇返回 None"""
+        return self.members[-1] if self.members else None
+
+    def similarity_with(self, issue: IssueNode) -> float:
+        """
+        这条问题与该簇的相似度：只与簇内最后一个年份的成员比较。
+
+        只比最新成员是有意为之：同一簇内年份是逐级串联的，
+        与今年的问题是否重复，取决于今年与"最近一次出现"的表述是否接近。
+        相似度计算本身统一由 text_similarity.encode_similarity 提供。
+        """
+        latest = self.latest()
+        if latest is None:
+            return 0.0
+        return encode_similarity(latest.encoded, issue.encoded)
+
+    def add(self, issue: IssueNode) -> None:
+        """把问题加入该簇；成员按年份升序，因此新问题一定是最后一条"""
+        self.members.append(issue)
+        self.occupied_years.add(issue.year)
+
+
+def create_cluster(issue: IssueNode) -> ProblemCluster:
+    """以一条问题为起点新建簇"""
+    return ProblemCluster(
+        security_type=issue.security_type,
+        members=[issue],
+        occupied_years={issue.year},
+    )
+
+
+# ====================== 输入整理 ======================
+
 def flatten_yearly_items(yearly_items: List[YearlyIssues]) -> List[FlatIssue]:
-    """把按年份组织的输入展平成（年份, 问题）列表，跳过空问题描述"""
+    """把"按年份组织的问题"展平成一维列表，跳过空问题描述"""
     flat: List[FlatIssue] = []
     for yearly in yearly_items:
-        for issue in yearly.issues:
-            if (issue.content or "").strip():
+        for item in yearly.issues:
+            if (item.content or "").strip():
                 flat.append(FlatIssue(
                     year=yearly.year,
-                    content=issue.content,
-                    security_type=issue.securityType,
-                    risk_level=issue.riskLevel,
+                    content=item.content,
+                    security_type=item.securityType,
+                    risk_level=item.riskLevel,
+                    rectified=item.rectified,
                 ))
             else:
                 print(f"跳过空问题描述: year={yearly.year}")
     return flat
 
 
-class UnionFind:
-    """并查集（路径压缩 + 按秩合并），用于相似度连通聚类"""
-
-    def __init__(self, n: int):
-        self._parent = list(range(n))
-        self._rank = [0] * n
-
-    def find(self, x: int) -> int:
-        root = x
-        while self._parent[root] != root:
-            root = self._parent[root]
-        # 路径压缩
-        while self._parent[x] != root:
-            self._parent[x], x = root, self._parent[x]
-        return root
-
-    def union(self, a: int, b: int) -> bool:
-        ra, rb = self.find(a), self.find(b)
-        if ra == rb:
-            return False
-        if self._rank[ra] < self._rank[rb]:
-            ra, rb = rb, ra
-        self._parent[rb] = ra
-        if self._rank[ra] == self._rank[rb]:
-            self._rank[ra] += 1
-        return True
-
-    def clusters(self) -> Dict[int, List[int]]:
-        """返回 {根节点: [成员下标列表]} 的连通分量字典"""
-        groups: Dict[int, List[int]] = {}
-        for i in range(len(self._parent)):
-            groups.setdefault(self.find(i), []).append(i)
-        return groups
-
-
-def cluster_by_similarity(
-        sim_matrix: np.ndarray,
-        threshold: float,
-        years: Optional[List[str]] = None,
-) -> Dict[int, List[int]]:
+def build_issue_nodes(flat_items: List[FlatIssue]) -> List[IssueNode]:
     """
-    连通聚类（并查集）：任意一对相似度 >= threshold 即合并进同一个簇。
-
-    :param sim_matrix: n x n 相似度矩阵
-    :param threshold: 相似度阈值
-    :param years: 可选，长度 n 的年份列表（与矩阵下标一一对应）。
-                  传入时启用"同一年份互斥"约束：
-                  1) 同一年份的两条问题无论多相似都不合并（一个簇里同一年的问题最多一条）；
-                  2) 合并前检查两个簇的年份集合是否相交，相交则放弃合并，
-                     避免 A-B、B-C 链式合并把同一年份的两条问题间接放进同一簇。
-    返回 {簇根节点: [成员下标列表]}
+    展平后的问题 -> IssueNode（每条只分词一次）。
+    相同文案只分词一次，重复出现的问题直接复用缓存结果。
     """
-    n = sim_matrix.shape[0]
-    uf = UnionFind(n)
-
-    # 约束模式：按相似度从高到低顺序尝试合并，贪心保证同一年份在一个簇内唯一
-    if years is not None and len(years) != n:
-        raise ValueError(f"years 长度({len(years)}) 与相似度矩阵维度({n})不一致")
-
-    if years is None:
-        for i in range(n):
-            for j in range(i + 1, n):
-                if sim_matrix[i, j] >= threshold:
-                    uf.union(i, j)
-        return uf.clusters()
-
-    # 每个簇根节点维护已占用年份集合
-    cluster_years: Dict[int, set] = {i: ({years[i]} if years[i] else set()) for i in range(n)}
-
-    pairs = [
-        (sim_matrix[i, j], i, j)
-        for i in range(n)
-        for j in range(i + 1, n)
-        if sim_matrix[i, j] >= threshold and years[i] != years[j]
+    encoder = TextEncoder()
+    return [
+        IssueNode(
+            year=item.year,
+            content=item.content,
+            security_type=item.security_type,
+            risk_level=item.risk_level,
+            rectified=item.rectified,
+            encoded=encoder.encode(item.content),
+        )
+        for item in flat_items
     ]
-    pairs.sort(key=lambda p: -p[0])
-
-    for _sim, i, j in pairs:
-        ri, rj = uf.find(i), uf.find(j)
-        if ri == rj:
-            continue
-        if cluster_years[ri] & cluster_years[rj]:
-            # 合并后会出现同一年份的两条问题，违反约束
-            continue
-        uf.union(ri, rj)
-        root = uf.find(ri)
-        merged = cluster_years[ri] | cluster_years[rj]
-        cluster_years[ri] = merged
-        cluster_years[rj] = merged
-        cluster_years[root] = merged
-
-    return uf.clusters()
 
 
-def group_items(flat_items: List[FlatIssue]) -> Dict[Tuple[str, str], List[int]]:
+def group_by_security_type(issues: List[IssueNode]) -> Dict[str, List[IssueNode]]:
     """
-    步骤 1 分组：按（安全类型, 风险级别）字符串分类（仅清理空白，不做编码转换），
-    只有两者的清理结果都相同才进入同一个比对分组。
-    返回 {分组键: [该组元素在展平列表中的全局下标]}
+    步骤 1：按安全类型分类（风险级别不参与分类，只用于统计）。
+    返回 {安全类型: [该类型下的问题]}；每类内部按年份升序排列。
     """
-    groups: Dict[Tuple[str, str], List[int]] = {}
-    for idx, item in enumerate(flat_items):
-        key = (item.security_type, item.risk_level)
-        groups.setdefault(key, []).append(idx)
+    groups: Dict[str, List[IssueNode]] = {}
+    for issue in issues:
+        groups.setdefault(issue.security_type, []).append(issue)
+    for group in groups.values():
+        group.sort(key=lambda issue: issue.year)
     return groups
+
+
+# ====================== 步骤 2：聚类 ======================
+
+def cluster_issues(issues: List[IssueNode], threshold: float) -> List[ProblemCluster]:
+    """
+    对同一安全类型下的问题聚类（入参已按年份升序）。
+
+    逐条处理，每条问题的处理逻辑：
+    1. 在已有簇中，找出"今年还没有成员"且"相似度 >= 阈值"的簇
+       （相似度只与簇内最后年份的成员比较）；
+    2. 有多个可选时，选相似度最高的那个；
+    3. 一个都找不到，就自己开一个新簇。
+
+    :param issues: 同一安全类型的问题，按年份升序
+    :param threshold: 相似度阈值（>= 阈值才算同一个问题）
+    """
+    clusters: List[ProblemCluster] = []
+
+    for issue in issues:
+        best_cluster, best_similarity = None, -1.0
+
+        for cluster in clusters:
+            # 同年互斥：本年度已有成员的簇直接跳过（一次集合判断，不做相似度计算）
+            if not cluster.accepts(issue):
+                continue
+            similarity = cluster.similarity_with(issue)
+            # 相似度达到阈值，且比当前最优更相似，才换成这个簇
+            if similarity >= threshold and similarity > best_similarity:
+                best_cluster, best_similarity = cluster, similarity
+
+        if best_cluster is not None:
+            best_cluster.add(issue)
+        else:
+            clusters.append(create_cluster(issue))
+
+    return clusters
+
+
+# ====================== 输出组装 ======================
+
+def to_duplicate_cluster(cluster: ProblemCluster) -> DuplicateCluster:
+    """
+    内部簇 -> 输出结构。
+    整改状态、风险级别、问题原文等统计信息，统一取"最后一个年份"的那条记录。
+    """
+    latest = cluster.members[-1]
+    return DuplicateCluster(
+        clusterId=0,  # 排序后统一编号
+        securityType=cluster.security_type,
+        count=len(cluster.members),
+        years=[m.year for m in cluster.members],
+        riskLevel=latest.risk_level,
+        rectified=latest.rectified,
+        content=latest.content,
+        occurrences=[
+            ClusterOccurrence(
+                year=m.year, content=m.content, riskLevel=m.risk_level, rectified=m.rectified,
+            )
+            for m in cluster.members
+        ],
+    )
 
 
 def detect_duplicate_issues_from_items(
         items: List[YearlyIssues],
-        threshold: Optional[float] = None,
-        method: str = METHOD_KEYWORD,
-        include_singletons: bool = False,
-        method_weights: Optional[Dict[str, float]] = None,
-        cross_year_only: bool = True,
+        start_year: int,
+        end_year: int,
+        threshold: float = DEFAULT_THRESHOLD,
 ) -> DuplicateDetectResponse:
     """
     重复问题检测核心流程（纯本地计算，不依赖任何模型服务）。
 
-    :param items: 按年份组织的问题明细（每个年份对应一堆问题）
-    :param threshold: 相似度阈值，任意一对相似度 >= 阈值即合并进同一簇；
-                     None 时使用该方法的默认阈值（keyword 0.60 /
-                      edit_distance 0.75 / ngram 0.70 / combo 0.70）
-    :param method: 相似度计算方法：
-                   keyword       jieba 分词 + 词集合 Jaccard（关键词重合度，默认）
-                   edit_distance 字符级 Levenshtein 编辑距离归一化（字面改写）
-                   ngram         字符 n-gram 余弦（局部字序鲁棒）
-                   combo         多方法加权融合（权重见 method_weights）
-    :param include_singletons: 是否输出仅出现一次的问题簇
-    :param method_weights: combo 融合权重，如 {"keyword": 0.4, "edit_distance": 0.3, "ngram": 0.3}
-    :param cross_year_only: 是否启用"跨年份"约束（默认 True）：
-                            同一个聚簇内不允许出现同一年的两条问题，
-                            即只有不同年份的问题才可能被合并到同一个聚类中
+    :param items: 按年份组织的问题明细；可包含统计窗口之外的前一年（作为同比基准）
+    :param start_year: 统计开始年份（含，int）
+    :param end_year: 统计结束年份（含，int）
+    :param threshold: 相似度阈值，>= 阈值才认为同一个问题；None 时用默认阈值 0.60
+
+    统计规则：逐年输出 start_year ~ end_year；某年重复问题需与上一年比对，
+    若上一年数据未传入，则该年重复问题数按 0 统计，其余统计不变。
     """
-    # 阈值与方法校验（未知方法在此抛出 ValueError）
-    threshold = resolve_threshold(method, threshold)
 
-    # 展平：年份 -> 问题列表 => (年份, 问题) 记录，过滤空问题描述
+    # 展平 + 预分词
     flat_items = flatten_yearly_items(items)
+    issues = build_issue_nodes(flat_items)
 
-    clusters_out: List[DuplicateCluster] = []
-    group_count = 0
+    # 步骤 1 按安全类型分类 -> 步骤 2 逐类聚类
+    all_clusters: List[DuplicateCluster] = []
+    ## 1. 先按照安全类型分组
+    for security_type, group in group_by_security_type(issues).items():
+        ## 2. 聚类分组
+        for cluster in cluster_issues(group, threshold):
+            all_clusters.append(to_duplicate_cluster(cluster))
 
-    if flat_items:
-        # 步骤 1：按（安全类型, 风险级别）字符串分组
-        groups = group_items(flat_items)
-        group_count = len(groups)
+    # 按出现次数降序统一编号（统计与输出共用同一份编号）
+    all_clusters.sort(key=lambda c: (-c.count, c.securityType, c.riskLevel, c.content))
+    for index, cluster in enumerate(all_clusters, start=1):
+        cluster.clusterId = index
 
-        # 步骤 2 + 3：组内两两相似度（按 method 分发计算）-> 并查集连通聚类
-        for (sec_key, risk_key), indices in groups.items():
-            n = len(indices)
-            if n < 2:
-                if include_singletons:
-                    clusters_out.append(_build_singleton_cluster(0, sec_key, risk_key, flat_items[indices[0]]))
-                continue
+    duplicate_clusters = [c for c in all_clusters if c.count >= 2]
 
-            group_texts = [flat_items[i].content for i in indices]
-            sim_matrix = build_group_similarity_matrix(method, group_texts, weights=method_weights)
-            group_years = [flat_items[i].year for i in indices] if cross_year_only else None
-            components = cluster_by_similarity(sim_matrix, threshold, years=group_years)
-
-            for members in components.values():
-                if len(members) < 2 and not include_singletons:
-                    continue
-                clusters_out.append(_build_cluster(sec_key, risk_key, members, indices, sim_matrix, flat_items))
-
-    # 按出现次数降序编排簇编号
-    clusters_out.sort(key=lambda c: (-c.count, c.securityType, c.riskLevel, c.clusterId))
-    for i, cluster in enumerate(clusters_out):
-        cluster.clusterId = i + 1
-
-    duplicate_clusters = [c for c in clusters_out if c.count >= 2]
-    duplicate_item_count = sum(c.count for c in duplicate_clusters)
+    # 统计窗口：start_year ~ end_year 逐年输出
+    year_items = collect_year_items(flat_items)
+    report_years = resolve_report_years(start_year, end_year)
 
     return DuplicateDetectResponse(
         threshold=threshold,
-        method=method,
         totalItems=len(flat_items),
-        groupCount=group_count,
         duplicateClusterCount=len(duplicate_clusters),
-        duplicateItemCount=duplicate_item_count,
-        clusters=clusters_out,
+        duplicateItemCount=sum(c.count for c in duplicate_clusters),
+        clusters=duplicate_clusters,
+        overview=build_duplicate_overview(duplicate_clusters),
+        yearlyRectification=build_yearly_rectification(year_items, duplicate_clusters, report_years),
+        yearlyDuplicates=build_yearly_duplicates(year_items, duplicate_clusters, report_years),
     )
-
-
-def _build_singleton_cluster(
-        cluster_id: int,
-        security_type: str,
-        risk_level: str,
-        item: FlatIssue,
-) -> DuplicateCluster:
-    return DuplicateCluster(
-        clusterId=cluster_id,
-        securityType=security_type,
-        riskLevel=risk_level,
-        count=1,
-        years=[item.year] if item.year else [],
-        representativeContent=item.content,
-        occurrences=[ClusterOccurrence(year=item.year, content=item.content)],
-    )
-
-
-def _build_cluster(
-        security_type: str,
-        risk_level: str,
-        members: List[int],
-        indices: List[int],
-        sim_matrix: np.ndarray,
-        flat_items: List[FlatIssue],
-) -> DuplicateCluster:
-    """根据簇成员构建输出结构；代表性问题取簇内平均相似度最高者（medoid）"""
-    # 代表性问题（medoid）：仅对 >= 2 的簇计算
-    representativeContent = ""
-    if len(members) >= 2:
-        sub_sim = sim_matrix[np.ix_(members, members)]
-        avg_sim = sub_sim.mean(axis=1)
-        rep_local = members[int(np.argmax(avg_sim))]
-        rep = flat_items[indices[rep_local]]
-        representativeContent = rep.content
-
-    member_items = [flat_items[indices[m]] for m in members]
-    member_items.sort(key=lambda it: it.year)
-    years = sorted({it.year for it in member_items if it.year})
-
-    return DuplicateCluster(
-        clusterId=0,  # 排序后统一编排
-        securityType=security_type,
-        riskLevel=risk_level,
-        count=len(member_items),
-        years=years,
-        representativeContent=representativeContent,
-        occurrences=[ClusterOccurrence(year=it.year, content=it.content) for it in member_items],
-    )
-
